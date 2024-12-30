@@ -41,7 +41,6 @@ def remote_teleoperate(
     fps: int, 
     client_socket: socket,
 ):
-    print("remote_teleoperation", fps)
     #if not robot.is_connected:
     #    robot.connect()
     

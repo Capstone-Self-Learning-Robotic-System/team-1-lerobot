@@ -197,7 +197,7 @@ if __name__ == "__main__":
         "--fps", type=int, default=None, help="Frames per second (set to None to disable)"
     )
     parser_teleop.add_argument(
-        "--teleop_time_s", type=int, default=None, help="Number of seconds of teleoperation (set to None for infinite teleoperation)"
+        "--teleop-time-s", type=int, default=None, help="Number of seconds of teleoperation (set to None for infinite teleoperation)"
     )
     parser_teleop.add_argument(
         "--ip", type=str, default=None, help="IP address of host remote socket"
