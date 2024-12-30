@@ -1,0 +1,15 @@
+artifact_uri: file:///Users/josh/Documents/COMPUTER_SCIENCE/lerobot_test_2/lerobot/mlruns/0/e144cc7cbb1c4feea482804664f1eb58/artifacts
+end_time: 1732256857138
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: e144cc7cbb1c4feea482804664f1eb58
+run_name: sedate-perch-395
+run_uuid: e144cc7cbb1c4feea482804664f1eb58
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1732256857131
+status: 3
+tags: []
+user_id: josh

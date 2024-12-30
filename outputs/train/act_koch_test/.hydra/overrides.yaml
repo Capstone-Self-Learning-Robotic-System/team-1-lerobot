@@ -1,0 +1,4 @@
+- dataset_repo_id=lerobot/koch_pick_place_5_lego
+- policy=act_koch_real
+- env=koch_real
+- device=mps
