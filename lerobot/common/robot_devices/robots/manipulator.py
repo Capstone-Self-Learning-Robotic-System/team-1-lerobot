@@ -81,7 +81,7 @@ class ManipulatorRobotConfig:
         super().__setattr__(prop, val)
 
     def __post_init__(self):
-        if self.robot_type not in ["koch", "koch_bimanual", "koch_leader", "koch_follower", "aloha", "so100", "moss"]:
+        if self.robot_type not in ["koch", "koch_bimanual", "koch_leader", "aloha", "so100", "moss"]:
             raise ValueError(f"Provided robot type ({self.robot_type}) is not supported.")
 
 
@@ -226,6 +226,42 @@ class ManipulatorRobot:
         self.is_connected = False
         self.logs = {}
 
+    def get_motor_names(self, arm: dict[str, MotorsBus]) -> list:
+        return [f"{arm}_{motor}" for arm, bus in arm.items() for motor in bus.motors]
+
+    @property
+    def camera_features(self) -> dict:
+        cam_ft = {}
+        for cam_key, cam in self.cameras.items():
+            key = f"observation.images.{cam_key}"
+            cam_ft[key] = {
+                "shape": (cam.height, cam.width, cam.channels),
+                "names": ["height", "width", "channels"],
+                "info": None,
+            }
+        return cam_ft
+
+    @property
+    def motor_features(self) -> dict:
+        action_names = self.get_motor_names(self.leader_arms)
+        state_names = self.get_motor_names(self.leader_arms)
+        return {
+            "action": {
+                "dtype": "float32",
+                "shape": (len(action_names),),
+                "names": action_names,
+            },
+            "observation.state": {
+                "dtype": "float32",
+                "shape": (len(state_names),),
+                "names": state_names,
+            },
+        }
+
+    @property
+    def features(self):
+        return {**self.motor_features, **self.camera_features}
+
     @property
     def has_camera(self):
         return len(self.cameras) > 0
@@ -264,7 +300,7 @@ class ManipulatorRobot:
             print(f"Connecting {name} leader arm.")
             self.leader_arms[name].connect()
 
-        if self.robot_type in ["koch", "koch_bimanual", "aloha"]:
+        if self.robot_type in ["koch", "koch_bimanual", "koch_leader", "aloha"]:
             from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
         elif self.robot_type in ["so100", "moss"]:
             from lerobot.common.robot_devices.motors.feetech import TorqueMode
@@ -279,7 +315,7 @@ class ManipulatorRobot:
         self.activate_calibration()
 
         # Set robot preset (e.g. torque in leader gripper for Koch v1.1)
-        if self.robot_type in ["koch", "koch_bimanual"]:
+        if self.robot_type in ["koch", "koch_bimanual", "koch_leader"]:
             self.set_koch_robot_preset()
         elif self.robot_type == "aloha":
             self.set_aloha_robot_preset()
@@ -292,7 +328,7 @@ class ManipulatorRobot:
             self.follower_arms[name].write("Torque_Enable", 1)
 
         if self.config.gripper_open_degree is not None:
-            if self.robot_type not in ["koch", "koch_bimanual"]:
+            if self.robot_type not in ["koch", "koch_bimanual", "koch_leader"]:
                 raise NotImplementedError(
                     f"{self.robot_type} does not support position AND current control in the handle, which is require to set the gripper open."
                 )
@@ -331,7 +367,7 @@ class ManipulatorRobot:
                 # TODO(rcadene): display a warning in __init__ if calibration file not available
                 print(f"Missing calibration file '{arm_calib_path}'")
 
-                if self.robot_type in ["koch", "koch_bimanual", "aloha"]:
+                if self.robot_type in ["koch", "koch_bimanual", "koch_leader", "aloha"]:
                     from lerobot.common.robot_devices.robots.dynamixel_calibration import run_arm_calibration
 
                     calibration = run_arm_calibration(arm, self.robot_type, name, arm_type)

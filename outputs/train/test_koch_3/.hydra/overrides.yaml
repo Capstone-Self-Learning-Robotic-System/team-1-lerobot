@@ -1,4 +1,5 @@
+- dataset_repo_id=test_dataset_3
 - policy=act_koch_real
 - env=koch_real
-- device=mps
+- device=cpu
 - wandb.enable=false

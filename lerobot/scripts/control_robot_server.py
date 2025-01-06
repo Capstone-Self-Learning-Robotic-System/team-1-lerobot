@@ -4,6 +4,7 @@ import time
 import socket
 import numpy as np
 import json
+import torch
 from pathlib import Path
 from typing import List
 
@@ -14,6 +15,7 @@ from lerobot.common.datasets.populate_dataset import (
     delete_current_episode,
     init_dataset,
     save_current_episode,
+    add_frame,
 )
 from lerobot.common.robot_devices.control_utils import (
     init_keyboard_listener,
@@ -59,6 +61,7 @@ def remote_teleoperate(
         data = client_socket.recv(48)
         
         motor_array = np.frombuffer(data, dtype=np.float32)
+        print(motor_array)
         
         #robot.follower_arms["main"].write("Goal_Position", motor_array)
 
@@ -72,11 +75,23 @@ def remote_record(
     fps: int, 
     warmup_time_s: float, 
     episode_time_s: float, 
-    num_episodes: int
+    num_episodes: int, 
+    repo_id: str
 ):
 
     #if not robot.is_connected:
     #    robot.connect()
+
+    dataset = init_dataset(
+        repo_id=repo_id, 
+        fps=fps, 
+        root="data", 
+        force_override=False, 
+        video=True,
+        write_images=False,
+        num_image_writer_processes=0, 
+        num_image_writer_threads=4 * 0
+    )
 
     timestamp = 0
     start_episode_t = time.perf_counter()
@@ -91,16 +106,15 @@ def remote_record(
         data = client_socket.recv(48)
         
         motor_array = np.frombuffer(data, dtype=np.float32)
+        print(motor_array)
         #robot.follower_arms["main"].write("Goal_Position", motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
         #log_control_info(robot, dt_s, fps=fps)
-    
-    curr_episode = 0
 
-    while curr_episode < num_episodes:
+    while dataset["num_episodes"] < num_episodes:
 
-        episode_index = curr_episode
+        episode_index = dataset["num_episodes"]
         log_say(f"Recording episode {episode_index} for {episode_time_s} seconds", True)
 
         for _ in range(episode_time_s*fps):
@@ -111,18 +125,35 @@ def remote_record(
             
             motor_array = np.frombuffer(data, dtype=np.float32)
             #robot.follower_arms["main"].write("Goal_Position", motor_array)
+            print(motor_array)
+
+            state = []
+            state.append(torch.from_numpy(motor_array))
+            state = torch.cat(state)
+
+            action = []
+            action.append(torch.from_numpy(motor_array))
+            action = torch.cat(action)
+
+            obs_dict, action_dict = {}, {}
+            obs_dict["observation.state"] = state
+            action_dict["action"] = action
+
+            add_frame(dataset, obs_dict, action_dict)
 
             dt_s = time.perf_counter() - start_loop_t
             #log_control_info(robot, dt_s, fps=fps)
+        
+        save_current_episode(dataset)
 
-        curr_episode += 1
+    lerobot_dataset = create_lerobot_dataset(dataset, True, False, None, True)
 
 
 if __name__ == "__main__":
 
     init_logging()
 
-    robot_path = "lerobot/configs/robot/koch_follower.yaml"
+    robot_path = "lerobot/configs/robot/koch_leader.yaml"
 
     robot_cfg = init_hydra_config(robot_path)
     robot = make_robot(robot_cfg)
@@ -148,7 +179,8 @@ if __name__ == "__main__":
             warmup_time_s = json_data['warmup_time_s']
             episode_time_s = json_data['episode_time_s']
             num_episodes = json_data['num_episodes']
-            remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes)
+            repo_id = json_data['repo_id']
+            remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes, repo_id)
 
     if robot.is_connected:
         # Disconnect manually to avoid a "Core dump" during process

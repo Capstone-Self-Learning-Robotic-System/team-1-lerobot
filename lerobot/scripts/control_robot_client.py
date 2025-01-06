@@ -8,6 +8,8 @@ import tqdm
 from pathlib import Path
 from typing import List
 
+from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
+
 # from safetensors.torch import load_file, save_file
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.common.datasets.populate_dataset import (
@@ -44,8 +46,9 @@ def remote_teleoperate(
     ip: str, 
     port: int
 ):
-    #if not robot.is_connected:
-    #    robot.connect()
+    if not robot.is_connected:
+        robot.connect()
+        robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -58,7 +61,7 @@ def remote_teleoperate(
     json_data = json.dumps(data)
     client_socket.send(json_data.encode().ljust(1024))
 
-    log_say(f"Teleoperate for {teleop_time_s} seconds", False)
+    #log_say(f"Teleoperate for {teleop_time_s} seconds", False)
 
     # start timer
     timestamp = 0
@@ -71,8 +74,8 @@ def remote_teleoperate(
         pbar.update(1)
         start_loop_t = time.perf_counter()
 
-        #motor_array = robot.leader_arms["main"].read("Present_Position")
-        motor_array = np.array([-0.43945312, 133.94531, 179.82422, -18.984375, -1.9335938, 34.541016])
+        motor_array = robot.leader_arms["main"].read("Present_Position")
+        #motor_array = np.array([-0.43945312, 133.94531, 179.82422, -18.984375, -1.9335938, 34.541016])
         client_socket.sendall(motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
@@ -80,6 +83,9 @@ def remote_teleoperate(
 
         dt_s = time.perf_counter() - start_loop_t
         timestamp = time.perf_counter() - start_episode_t
+    
+    robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+    robot.disconnect()
     
     client_socket.close()
 
@@ -90,13 +96,15 @@ def remote_record(
     fps: int, 
     ip: str, 
     port: int, 
+    repo_id: str, 
     warmup_time_s=2, 
-    episode_time_s=10, 
-    num_episodes=10
+    episode_time_s=5, 
+    num_episodes=3
 ):
 
-    #if not robot.is_connected:
-    #    robot.connect()
+    if not robot.is_connected:
+        robot.connect()
+        robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -108,10 +116,11 @@ def remote_record(
     data['warmup_time_s'] = warmup_time_s
     data['episode_time_s'] = episode_time_s
     data['num_episodes'] = num_episodes
+    data['repo_id'] = repo_id
     json_data = json.dumps(data)
     client_socket.send(json_data.encode().ljust(1024))
 
-    log_say(f"Warmup record for {warmup_time_s} seconds", False)
+    #log_say(f"Warmup record for {warmup_time_s} seconds", False)
     timestamp = 0
     start_episode_t = time.perf_counter()
 
@@ -122,8 +131,7 @@ def remote_record(
         pbar.update(1)
         start_loop_t = time.perf_counter()
 
-        #motor_array = robot.leader_arms["main"].read("Present_Position")
-        motor_array = np.array([-0.43945312, 133.94531, 179.82422, -18.984375, -1.9335938, 34.541016])
+        motor_array = robot.leader_arms["main"].read("Present_Position")
         client_socket.sendall(motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
@@ -137,7 +145,7 @@ def remote_record(
     while curr_episode < num_episodes:
 
         episode_index = curr_episode
-        log_say(f"Recording episode {episode_index} for {episode_time_s} seconds", False)
+        #log_say(f"Recording episode {episode_index} for {episode_time_s} seconds", False)
 
         pbar = tqdm.tqdm(range(episode_time_s*fps))
 
@@ -148,8 +156,7 @@ def remote_record(
             pbar.update(1)
             start_loop_t = time.perf_counter()
 
-            #motor_array = robot.leader_arms["main"].read("Present_Position")
-            motor_array = np.array([-0.43945312, 133.94531, 179.82422, -18.984375, -1.9335938, 34.541016])
+            motor_array = robot.leader_arms["main"].read("Present_Position")
             client_socket.sendall(motor_array)
 
             dt_s = time.perf_counter() - start_loop_t
@@ -159,6 +166,11 @@ def remote_record(
             timestamp = time.perf_counter() - start_episode_t
     
         curr_episode += 1
+    
+    robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+    robot.disconnect()
+
+    client_socket.close()
 
 
 if __name__ == "__main__":
@@ -220,6 +232,13 @@ if __name__ == "__main__":
     parser_record.add_argument(
         "--port", type=int, default=None, help="Port address of host remote socket"
     )
+    parser_record.add_argument(
+        "--repo-id", type=str, default=None, help="Dataset identifier",
+    )
+    parser_record.add_argument(
+        "--num-episodes", type=int, default=None, help="Number of episodes recorded",
+    )
+
 
     args = parser.parse_args()
 

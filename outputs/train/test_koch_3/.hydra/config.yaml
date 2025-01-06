@@ -1,0 +1,134 @@
+resume: false
+device: cpu
+use_amp: false
+seed: 1000
+dataset_repo_id: test_dataset_3
+video_backend: pyav
+training:
+  offline_steps: 80000
+  num_workers: 4
+  batch_size: 8
+  eval_freq: -1
+  log_freq: 100
+  save_checkpoint: true
+  save_freq: 10000
+  online_steps: 0
+  online_rollout_n_episodes: 1
+  online_rollout_batch_size: 1
+  online_steps_between_rollouts: 1
+  online_sampling_ratio: 0.5
+  online_env_seed: null
+  online_buffer_capacity: null
+  online_buffer_seed_size: 0
+  do_online_rollout_async: false
+  image_transforms:
+    enable: false
+    max_num_transforms: 3
+    random_order: false
+    brightness:
+      weight: 1
+      min_max:
+      - 0.8
+      - 1.2
+    contrast:
+      weight: 1
+      min_max:
+      - 0.8
+      - 1.2
+    saturation:
+      weight: 1
+      min_max:
+      - 0.5
+      - 1.5
+    hue:
+      weight: 1
+      min_max:
+      - -0.05
+      - 0.05
+    sharpness:
+      weight: 1
+      min_max:
+      - 0.8
+      - 1.2
+  lr: 1.0e-05
+  lr_backbone: 1.0e-05
+  weight_decay: 0.0001
+  grad_clip_norm: 10
+  delta_timestamps:
+    action: '[i / ${fps} for i in range(${policy.chunk_size})]'
+eval:
+  n_episodes: 50
+  batch_size: 50
+  use_async_envs: false
+wandb:
+  enable: false
+  disable_artifact: false
+  project: lerobot
+  notes: ''
+fps: 30
+env:
+  name: real_world
+  task: null
+  state_dim: 6
+  action_dim: 6
+  fps: ${fps}
+override_dataset_stats:
+  observation.images.laptop:
+    mean:
+    - - - 0.485
+    - - - 0.456
+    - - - 0.406
+    std:
+    - - - 0.229
+    - - - 0.224
+    - - - 0.225
+  observation.images.phone:
+    mean:
+    - - - 0.485
+    - - - 0.456
+    - - - 0.406
+    std:
+    - - - 0.229
+    - - - 0.224
+    - - - 0.225
+policy:
+  name: act
+  n_obs_steps: 1
+  chunk_size: 100
+  n_action_steps: 100
+  input_shapes:
+    observation.images.laptop:
+    - 3
+    - 480
+    - 640
+    observation.images.phone:
+    - 3
+    - 480
+    - 640
+    observation.state:
+    - ${env.state_dim}
+  output_shapes:
+    action:
+    - ${env.action_dim}
+  input_normalization_modes:
+    observation.images.laptop: mean_std
+    observation.images.phone: mean_std
+    observation.state: mean_std
+  output_normalization_modes:
+    action: mean_std
+  vision_backbone: resnet18
+  pretrained_backbone_weights: ResNet18_Weights.IMAGENET1K_V1
+  replace_final_stride_with_dilation: false
+  pre_norm: false
+  dim_model: 512
+  n_heads: 8
+  dim_feedforward: 3200
+  feedforward_activation: relu
+  n_encoder_layers: 4
+  n_decoder_layers: 1
+  use_vae: true
+  latent_dim: 32
+  n_vae_encoder_layers: 4
+  temporal_ensemble_momentum: null
+  dropout: 0.1
+  kl_weight: 10.0
