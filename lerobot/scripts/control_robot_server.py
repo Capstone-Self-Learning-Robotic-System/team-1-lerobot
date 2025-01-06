@@ -127,6 +127,10 @@ def remote_record(
             #robot.follower_arms["main"].write("Goal_Position", motor_array)
             print(motor_array)
 
+            observation, action = robot.teleop_step(record_data=True)
+            add_frame(dataset, observation, action)
+
+            '''
             state = []
             state.append(torch.from_numpy(motor_array))
             state = torch.cat(state)
@@ -140,6 +144,7 @@ def remote_record(
             action_dict["action"] = action
 
             add_frame(dataset, obs_dict, action_dict)
+            '''
 
             dt_s = time.perf_counter() - start_loop_t
             #log_control_info(robot, dt_s, fps=fps)
