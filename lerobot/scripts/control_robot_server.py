@@ -57,8 +57,8 @@ def remote_teleoperate(
     for _ in range(fps*teleop_time_s):
         start_loop_t = time.perf_counter()
 
-        #data = client_socket.recv(24)
-        #motor_array = np.frombuffer(data, dtype=np.float32)
+        data = client_socket.recv(24)
+        motor_array = np.frombuffer(data, dtype=np.float32)
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
@@ -78,8 +78,8 @@ def remote_record(
     repo_id: str
 ):
 
-    #if not robot.is_connected:
-    #    robot.connect()
+    if not robot.is_connected:
+        robot.connect()
 
     dataset = init_dataset(
         repo_id=repo_id, 
@@ -102,10 +102,10 @@ def remote_record(
         start_loop_t = time.perf_counter()
 
         #motor_array = robot.leader_arms["main"].read("Present_Position")
-        data = client_socket.recv(48)
+        #data = client_socket.recv(48)
         
-        motor_array = np.frombuffer(data, dtype=np.float32)
-        print(motor_array)
+        #motor_array = np.frombuffer(data, dtype=np.float32)
+        #print(motor_array)
         #robot.follower_arms["main"].write("Goal_Position", motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
@@ -119,12 +119,12 @@ def remote_record(
         for _ in range(episode_time_s*fps):
             start_loop_t = time.perf_counter()
 
-            #motor_array = robot.leader_arms["main"].read("Present_Position")
-            data = client_socket.recv(48)
+            motor_array = robot.leader_arms["main"].read("Present_Position")
+            #data = client_socket.recv(48)
             
-            motor_array = np.frombuffer(data, dtype=np.float32)
+            #motor_array = np.frombuffer(data, dtype=np.float32)
             #robot.follower_arms["main"].write("Goal_Position", motor_array)
-            print(motor_array)
+            #print(motor_array)
 
             observation, action = robot.teleop_step(record_data=True)
             add_frame(dataset, observation, action)
@@ -141,14 +141,14 @@ if __name__ == "__main__":
 
     init_logging()
 
-    robot_path = "lerobot/configs/robot/koch.yaml"
+    robot_path = "lerobot/configs/robot/koch_leader.yaml"
 
     robot_cfg = init_hydra_config(robot_path)
     robot = make_robot(robot_cfg)
 
     # open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("10.0.0.19", 12345))
+    server_socket.bind(("10.0.0.58", 12345))
 
     while True:
         server_socket.listen(5)

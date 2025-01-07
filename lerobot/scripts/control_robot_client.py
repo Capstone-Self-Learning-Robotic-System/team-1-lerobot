@@ -67,23 +67,21 @@ def remote_teleoperate(
     timestamp = 0
     start_episode_t = time.perf_counter()
 
-    #pbar = tqdm.tqdm(range(teleop_time_s*fps))
+    pbar = tqdm.tqdm(range(teleop_time_s*fps))
     
     # teleoperation loop
     while timestamp < teleop_time_s:
-        #pbar.update(1)
+        pbar.update(1)
         start_loop_t = time.perf_counter()
 
         motor_array = robot.leader_arms["main"].read("Present_Position")
-        #motor_array = np.array([-0.43945312, 133.94531, 179.82422, -18.984375, -1.9335938, 34.541016])
+        client_socket.sendall(motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
 
         dt_s = time.perf_counter() - start_loop_t
         timestamp = time.perf_counter() - start_episode_t
-        log_control_info(robot, dt_s, fps=fps)
-        client_socket.sendall(motor_array)
     
     robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
     robot.disconnect()
@@ -103,9 +101,9 @@ def remote_record(
     num_episodes=3
 ):
 
-    if not robot.is_connected:
-        robot.connect()
-        robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+    #if not robot.is_connected:
+        #robot.connect()
+        #robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -132,8 +130,8 @@ def remote_record(
         pbar.update(1)
         start_loop_t = time.perf_counter()
 
-        motor_array = robot.leader_arms["main"].read("Present_Position")
-        client_socket.sendall(motor_array)
+        #motor_array = robot.leader_arms["main"].read("Present_Position")
+        #client_socket.sendall(motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
@@ -157,8 +155,8 @@ def remote_record(
             pbar.update(1)
             start_loop_t = time.perf_counter()
 
-            motor_array = robot.leader_arms["main"].read("Present_Position")
-            client_socket.sendall(motor_array)
+            #motor_array = robot.leader_arms["main"].read("Present_Position")
+            #client_socket.sendall(motor_array)
 
             dt_s = time.perf_counter() - start_loop_t
             busy_wait(1 / fps - dt_s)
@@ -168,8 +166,8 @@ def remote_record(
     
         curr_episode += 1
     
-    robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
-    robot.disconnect()
+    #robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+    #robot.disconnect()
 
     client_socket.close()
 
