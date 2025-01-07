@@ -4,7 +4,7 @@ import time
 import socket
 import numpy as np
 import json
-import torch
+#import torch
 from pathlib import Path
 from typing import List
 
@@ -51,22 +51,21 @@ def remote_teleoperate(
     timestamp = 0
     start_episode_t = time.perf_counter()
 
-    log_say(f"Teleoperate for {teleop_time_s} seconds", True)
+    #log_say(f"Teleoperate for {teleop_time_s} seconds", True)
     
     # teleoperation loop
-    for _ in range(teleop_time_s*fps):
+    for _ in range(fps*teleop_time_s):
         start_loop_t = time.perf_counter()
 
-        #motor_array = robot.leader_arms["main"].read("Present_Position")
-        data = client_socket.recv(48)
-        
-        motor_array = np.frombuffer(data, dtype=np.float32)
-        print(motor_array)
-        
-        #robot.follower_arms["main"].write("Goal_Position", motor_array)
+        #data = client_socket.recv(24)
+        #motor_array = np.frombuffer(data, dtype=np.float32)
 
         dt_s = time.perf_counter() - start_loop_t
-        #log_control_info(robot, dt_s, fps=fps)
+        busy_wait(1 / fps - dt_s)
+
+        dt_s = time.perf_counter() - start_loop_t
+        timestamp = time.perf_counter() - start_episode_t
+        log_control_info(robot, dt_s, fps=fps)
 
 
 @safe_disconnect
@@ -130,22 +129,6 @@ def remote_record(
             observation, action = robot.teleop_step(record_data=True)
             add_frame(dataset, observation, action)
 
-            '''
-            state = []
-            state.append(torch.from_numpy(motor_array))
-            state = torch.cat(state)
-
-            action = []
-            action.append(torch.from_numpy(motor_array))
-            action = torch.cat(action)
-
-            obs_dict, action_dict = {}, {}
-            obs_dict["observation.state"] = state
-            action_dict["action"] = action
-
-            add_frame(dataset, obs_dict, action_dict)
-            '''
-
             dt_s = time.perf_counter() - start_loop_t
             #log_control_info(robot, dt_s, fps=fps)
         
@@ -158,14 +141,14 @@ if __name__ == "__main__":
 
     init_logging()
 
-    robot_path = "lerobot/configs/robot/koch_leader.yaml"
+    robot_path = "lerobot/configs/robot/koch.yaml"
 
     robot_cfg = init_hydra_config(robot_path)
     robot = make_robot(robot_cfg)
 
     # open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("localhost", 12345))
+    server_socket.bind(("10.0.0.19", 12345))
 
     while True:
         server_socket.listen(5)
@@ -178,7 +161,7 @@ if __name__ == "__main__":
 
         if control_mode == 'remote_teleoperate':
             teleop_time_s = json_data['teleop_time_s']
-            remote_teleoperate(robot, teleop_time_s, fps, client_socket)
+            remote_teleoperate(robot, fps, teleop_time_s, client_socket)
 
         elif control_mode == "remote_record":
             warmup_time_s = json_data['warmup_time_s']
