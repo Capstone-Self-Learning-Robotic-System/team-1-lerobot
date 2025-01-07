@@ -31,6 +31,12 @@ from lerobot.common.robot_devices.robots.utils import Robot
 from lerobot.common.robot_devices.utils import safe_disconnect
 from lerobot.common.utils.utils import init_hydra_config, init_logging, log_say, none_or_int
 
+
+########################################################################################
+# Util functions
+########################################################################################
+
+
 def busy_wait(dt):   
     current_time = time.time()
     while (time.time() < current_time+dt):
