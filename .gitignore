@@ -1,3 +1,13 @@
+# IDE Folders
+.vscode/
+.history/
+*.vsix
+
+.fleet/
+
+# Python Build Components
 __pycache__/
+
+# LeRobot Cache / Local Data
 .cache/
 outputs/*
