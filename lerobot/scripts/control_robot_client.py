@@ -29,8 +29,19 @@ from lerobot.common.robot_devices.control_utils import (
 )
 from lerobot.common.robot_devices.robots.factory import make_robot
 from lerobot.common.robot_devices.robots.utils import Robot
-from lerobot.common.robot_devices.utils import busy_wait, safe_disconnect
+from lerobot.common.robot_devices.utils import safe_disconnect
 from lerobot.common.utils.utils import init_hydra_config, init_logging, log_say, none_or_int
+
+
+########################################################################################
+# Util functions
+########################################################################################
+
+
+def busy_wait(dt):   
+    current_time = time.time()
+    while (time.time() < current_time+dt):
+        pass
     
 
 ########################################################################################
@@ -48,7 +59,6 @@ def remote_teleoperate(
 ):
     if not robot.is_connected:
         robot.connect()
-        robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
