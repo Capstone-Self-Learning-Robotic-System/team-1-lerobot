@@ -60,11 +60,15 @@ def remote_teleoperate(
     if not robot.is_connected:
         robot.connect()
     
+    if teleop_time_s == None:
+        teleop_time_s = float("inf")
+        log_say(f"Teleoperate for infinite time", True)
+    else:
+        log_say(f"Teleoperate for {teleop_time_s} seconds", True)
+
     # start timer
     timestamp = 0
     start_episode_t = time.perf_counter()
-
-    log_say(f"Teleoperate for {teleop_time_s} seconds", True)
     
     # teleoperation loop
     while timestamp < teleop_time_s:
@@ -72,6 +76,10 @@ def remote_teleoperate(
 
         data = client_socket.recv(24)
         motor_array = np.frombuffer(data, dtype=np.float32)
+        if not np.any(motor_array):
+            log_say(f"Teleoperation terminated", True)
+            break
+
         robot.follower_arms["main"].write("Goal_Position", motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
@@ -94,6 +102,8 @@ def remote_record(
     num_episodes: int, 
     repo_id: str
 ):
+
+    # does not work yet...
 
     if not robot.is_connected:
         robot.connect()

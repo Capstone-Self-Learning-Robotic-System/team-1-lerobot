@@ -53,9 +53,9 @@ def busy_wait(dt):
 def remote_teleoperate(
     robot: Robot, 
     fps: int, 
-    teleop_time_s: float, 
     ip: str, 
-    port: int
+    port: int,
+    teleop_time_s: float | None
 ):
     if not robot.is_connected:
         robot.connect()
@@ -70,18 +70,23 @@ def remote_teleoperate(
     data['teleop_time_s'] = teleop_time_s
     json_data = json.dumps(data)
     client_socket.send(json_data.encode().ljust(1024))
-
-    #log_say(f"Teleoperate for {teleop_time_s} seconds", False)
+    
+    if teleop_time_s == None:
+        teleop_time_s = float("inf")
+        log_say(f"Teleoperate for infinite time", True)
+    else:
+        log_say(f"Teleoperate for {teleop_time_s} seconds", False)
+        pbar = tqdm.tqdm(range(teleop_time_s*fps))
 
     # start timer
     timestamp = 0
     start_episode_t = time.perf_counter()
-
-    pbar = tqdm.tqdm(range(teleop_time_s*fps))
     
     # teleoperation loop
     while timestamp < teleop_time_s:
-        pbar.update(1)
+        if teleop_time_s != float("inf"):
+            pbar.update(1)
+        
         start_loop_t = time.perf_counter()
 
         motor_array = robot.leader_arms["main"].read("Present_Position")
@@ -110,6 +115,8 @@ def remote_record(
     episode_time_s=5, 
     num_episodes=3
 ):
+
+    # does not work yet...
 
     #if not robot.is_connected:
         #robot.connect()
