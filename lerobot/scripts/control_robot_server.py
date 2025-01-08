@@ -70,6 +70,8 @@ def remote_teleoperate(
 
         data = client_socket.recv(24)
         motor_array = np.frombuffer(data, dtype=np.float32)
+        if motor_array == []:
+            break
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
