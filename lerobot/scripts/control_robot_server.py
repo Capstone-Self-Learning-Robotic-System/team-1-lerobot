@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 from typing import List
 
+from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
+
 # from safetensors.torch import load_file, save_file
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.common.datasets.populate_dataset import (
@@ -55,14 +57,14 @@ def remote_teleoperate(
     teleop_time_s: float, 
     client_socket: socket
 ):
-    #if not robot.is_connected:
-    #    robot.connect()
+    if not robot.is_connected:
+        robot.connect()
     
     # start timer
     timestamp = 0
     start_episode_t = time.perf_counter()
 
-    #log_say(f"Teleoperate for {teleop_time_s} seconds", True)
+    log_say(f"Teleoperate for {teleop_time_s} seconds", True)
     
     # teleoperation loop
     while timestamp < teleop_time_s:
@@ -70,14 +72,17 @@ def remote_teleoperate(
 
         data = client_socket.recv(24)
         motor_array = np.frombuffer(data, dtype=np.float32)
-        print(motor_array)
+        robot.follower_arms["main"].write("Goal_Position", motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
 
         dt_s = time.perf_counter() - start_loop_t
         timestamp = time.perf_counter() - start_episode_t
-        #log_control_info(robot, dt_s, fps=fps)
+        log_control_info(robot, dt_s, fps=fps)
+    
+    robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+    robot.disconnect()
 
 
 @safe_disconnect
@@ -153,17 +158,17 @@ if __name__ == "__main__":
 
     init_logging()
 
-    robot_path = "lerobot/configs/robot/koch.yaml"
+    robot_path = "./lerobot/configs/robot/koch_follower.yaml"
 
-    robot_cfg = init_hydra_config(robot_path)
+    robot_cfg = init_hydra_config(robot_path, None)
     robot = make_robot(robot_cfg)
 
     # open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("10.0.0.19", 12345))
+    server_socket.bind(("192.168.0.96", 50064))
 
     while True:
-        server_socket.listen(5)
+        server_socket.listen(1)
         client_socket, addr = server_socket.accept()
 
         data = client_socket.recv(1024).decode()
