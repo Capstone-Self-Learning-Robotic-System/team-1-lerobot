@@ -65,20 +65,18 @@ def remote_teleoperate(
     #log_say(f"Teleoperate for {teleop_time_s} seconds", True)
     
     # teleoperation loop
-    for _ in range(fps*teleop_time_s):
+    while timestamp < teleop_time_s:
         start_loop_t = time.perf_counter()
 
         data = client_socket.recv(24)
         motor_array = np.frombuffer(data, dtype=np.float32)
-        if motor_array == []:
-            break
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
 
         dt_s = time.perf_counter() - start_loop_t
         timestamp = time.perf_counter() - start_episode_t
-        log_control_info(robot, dt_s, fps=fps)
+        #log_control_info(robot, dt_s, fps=fps)
 
 
 @safe_disconnect
@@ -154,14 +152,14 @@ if __name__ == "__main__":
 
     init_logging()
 
-    robot_path = "lerobot/configs/robot/koch_leader.yaml"
+    robot_path = "lerobot/configs/robot/koch.yaml"
 
     robot_cfg = init_hydra_config(robot_path)
     robot = make_robot(robot_cfg)
 
     # open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("10.0.0.58", 12345))
+    server_socket.bind(("10.0.0.19", 12345))
 
     while True:
         server_socket.listen(5)
