@@ -7,6 +7,7 @@ import json
 import tqdm
 from pathlib import Path
 from typing import List
+from datetime import datetime
 
 from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
 
@@ -82,22 +83,30 @@ def remote_teleoperate(
     timestamp = 0
     start_episode_t = time.perf_counter()
     
-    # teleoperation loop
-    while timestamp < teleop_time_s:
-        if teleop_time_s != float("inf"):
-            pbar.update(1)
-        
-        start_loop_t = time.perf_counter()
+    try:
+        # teleoperation loop
+        while timestamp < teleop_time_s:
+            if teleop_time_s != float("inf"):
+                pbar.update(1)
+            
+            start_loop_t = time.perf_counter()
 
-        motor_array = robot.leader_arms["main"].read("Present_Position")
-        client_socket.sendall(motor_array)
+            motor_array = robot.leader_arms["main"].read("Present_Position")
+            client_socket.sendall(motor_array)
 
-        dt_s = time.perf_counter() - start_loop_t
-        busy_wait(1 / fps - dt_s)
+            dt_s = time.perf_counter() - start_loop_t
+            busy_wait(1 / fps - dt_s)
 
-        dt_s = time.perf_counter() - start_loop_t
-        timestamp = time.perf_counter() - start_episode_t
+            dt_s = time.perf_counter() - start_loop_t
+            timestamp = time.perf_counter() - start_episode_t
     
+    except KeyboardInterrupt:
+        log_say(f"Teleoperation terminated", True)
+        robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+        robot.disconnect()
+
+        client_socket.close()
+
     robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
     robot.disconnect()
     
@@ -111,16 +120,14 @@ def remote_record(
     ip: str, 
     port: int, 
     repo_id: str, 
+    model_id: int,
     warmup_time_s=2, 
     episode_time_s=5, 
     num_episodes=3
 ):
 
-    # does not work yet...
-
-    #if not robot.is_connected:
-        #robot.connect()
-        #robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+    if not robot.is_connected:
+        robot.connect()
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -133,58 +140,70 @@ def remote_record(
     data['episode_time_s'] = episode_time_s
     data['num_episodes'] = num_episodes
     data['repo_id'] = repo_id
+    data['model_id'] = model_id
     json_data = json.dumps(data)
     client_socket.send(json_data.encode().ljust(1024))
 
-    #log_say(f"Warmup record for {warmup_time_s} seconds", False)
+    curr_episode = 0
+
+    log_say(f"Warmup record for {warmup_time_s} seconds", False)
     timestamp = 0
     start_episode_t = time.perf_counter()
 
     pbar = tqdm.tqdm(range(warmup_time_s*fps))
 
-    # warmup
-    while timestamp < warmup_time_s:
-        pbar.update(1)
-        start_loop_t = time.perf_counter()
-
-        #motor_array = robot.leader_arms["main"].read("Present_Position")
-        #client_socket.sendall(motor_array)
-
-        dt_s = time.perf_counter() - start_loop_t
-        busy_wait(1 / fps - dt_s)
-
-        dt_s = time.perf_counter() - start_loop_t
-        timestamp = time.perf_counter() - start_episode_t
-
-    curr_episode = 0
-
-    while curr_episode < num_episodes:
-
-        episode_index = curr_episode
-        #log_say(f"Recording episode {episode_index} for {episode_time_s} seconds", False)
-
-        pbar = tqdm.tqdm(range(episode_time_s*fps))
-
-        timestamp = 0
-        start_episode_t = time.perf_counter()
-
-        while timestamp < episode_time_s:
+    try:
+        # warmup loop
+        while timestamp < warmup_time_s:
             pbar.update(1)
             start_loop_t = time.perf_counter()
 
-            #motor_array = robot.leader_arms["main"].read("Present_Position")
-            #client_socket.sendall(motor_array)
+            motor_array = robot.leader_arms["main"].read("Present_Position")
+            client_socket.sendall(motor_array)
 
             dt_s = time.perf_counter() - start_loop_t
             busy_wait(1 / fps - dt_s)
 
             dt_s = time.perf_counter() - start_loop_t
             timestamp = time.perf_counter() - start_episode_t
+
+    except KeyboardInterrupt:
+        log_say(f"Remote recording terminated", True)
+        curr_episode = num_episodes
+
+    while curr_episode < num_episodes:
+
+        log_say(f"Recording episode {curr_episode} for {episode_time_s} seconds", False)
+
+        pbar = tqdm.tqdm(range(episode_time_s*fps))
+
+        timestamp = 0
+        start_episode_t = time.perf_counter()
+
+        try:
+            # episode loop
+            while timestamp < episode_time_s:
+                pbar.update(1)
+                start_loop_t = time.perf_counter()
+
+                motor_array = robot.leader_arms["main"].read("Present_Position")
+                client_socket.sendall(motor_array)
+
+                dt_s = time.perf_counter() - start_loop_t
+                busy_wait(1 / fps - dt_s)
+
+                dt_s = time.perf_counter() - start_loop_t
+                timestamp = time.perf_counter() - start_episode_t
+        
+        except KeyboardInterrupt:
+            log_say(f"Remote recording terminated", True)
+            curr_episode = num_episodes
+            break
     
         curr_episode += 1
     
-    #robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
-    #robot.disconnect()
+    robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+    robot.disconnect()
 
     client_socket.close()
 
@@ -249,12 +268,14 @@ if __name__ == "__main__":
         "--port", type=int, default=None, help="Port address of host remote socket"
     )
     parser_record.add_argument(
-        "--repo-id", type=str, default=None, help="Dataset identifier",
+        "--repo-id", type=str, default=str(datetime.now()), help="Dataset identifier",
+    )
+    parser_record.add_argument(
+        "--model-id", type=int, default=None, help="Model identifier",
     )
     parser_record.add_argument(
         "--num-episodes", type=int, default=None, help="Number of episodes recorded",
     )
-
 
     args = parser.parse_args()
 
