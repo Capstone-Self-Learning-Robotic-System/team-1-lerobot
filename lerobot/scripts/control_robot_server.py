@@ -179,6 +179,7 @@ def remote_record(
             action = torch.cat(action)
 
             images = {}
+            # TODO: Exteract image here for transmission over socket, when async_read is performed it comes directly from opencv and has been converted from BGR to RGB
             for name in robot.cameras:
                 images[name] = robot.cameras[name].async_read()
                 images[name] = torch.from_numpy(images[name])
@@ -197,6 +198,7 @@ def remote_record(
             dt_s = time.perf_counter() - start_loop_t
             timestamp = time.perf_counter() - start_episode_t
             log_control_info(robot, dt_s, fps=fps)
+            # TODO: Add send over socket here (potentially async to not slow mirroring of arm movements and data recording)
         
         curr_episode += 1
         save_current_episode(dataset)
@@ -222,6 +224,8 @@ if __name__ == "__main__":
 
     try:
         while True:
+            # TODO: Add case for camera connection
+            # TODO: Connect to robot imediately and then torque when a control conenction is created 
             server_socket.listen(1)
             client_socket, addr = server_socket.accept()
 
