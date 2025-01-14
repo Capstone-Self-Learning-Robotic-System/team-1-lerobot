@@ -9,5 +9,6 @@
 __pycache__/
 
 # LeRobot Cache / Local Data
-.cache/
+.cache/*
+!.cache/calibration
 outputs/*
