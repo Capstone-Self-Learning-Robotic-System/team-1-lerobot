@@ -1,5 +1,6 @@
 import argparse
 import logging
+import threading
 import time
 import socket
 import numpy as np
@@ -59,7 +60,12 @@ def remote_teleoperate(
     client_socket: socket
 ):
     if not robot.is_connected:
-        robot.connect()
+        print("Robot was not connected, attempting to reconnect", end="")
+        while not robot.is_connected:
+            print(".", end="")
+            robot.connect()
+
+        print()
     
     if teleop_time_s == None:
         teleop_time_s = float("inf")
@@ -91,7 +97,6 @@ def remote_teleoperate(
         log_control_info(robot, dt_s, fps=fps)
     
     robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
-    robot.disconnect()
 
 
 @safe_disconnect
@@ -108,7 +113,12 @@ def remote_record(
     # does not work yet...
 
     if not robot.is_connected:
-        robot.connect()
+        print("Robot was not connected, attempting to reconnect", end="")
+        while not robot.is_connected:
+            print(".", end="")
+            robot.connect()
+
+        print()
 
     dataset = init_dataset(
         repo_id=repo_id, 
@@ -206,49 +216,65 @@ def remote_record(
     lerobot_dataset = create_lerobot_dataset(dataset, True, False, None, True)
 
     robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
-    robot.disconnect()
 
+def accept_client(robot: Robot, client_socket: socket):
+    data = client_socket.recv(1024).decode()
+    json_data = json.loads(data)
+    control_mode = json_data['control_mode']
+    fps = json_data['fps']
+
+    if control_mode == 'remote_teleoperate':
+        teleop_time_s = json_data['teleop_time_s']
+        remote_teleoperate(robot, fps, teleop_time_s, client_socket)
+
+    elif control_mode == "remote_record":
+        warmup_time_s = json_data['warmup_time_s']
+        episode_time_s = json_data['episode_time_s']
+        num_episodes = json_data['num_episodes']
+        repo_id = json_data['repo_id']
+        model_id = json_data['model_id']
+        remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes, repo_id, model_id)
+
+    client_socket.close()
 
 if __name__ == "__main__":
 
     init_logging()
 
+    # Configure robot
     robot_path = "./lerobot/configs/robot/koch_follower.yaml"
 
     robot_cfg = init_hydra_config(robot_path, None)
     robot = make_robot(robot_cfg)
 
-    # open socket for communication
+    # Connect to robot before teleop starts so camera stream can be started
+    robot.connect()
+    robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+
+    # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind(("192.168.0.96", 50064))
+    server_socket.listen(1)
+
+    program_ending = False
+    threads = []
 
     try:
         while True:
             # TODO: Add case for camera connection
-            # TODO: Connect to robot imediately and then torque when a control conenction is created 
-            server_socket.listen(1)
             client_socket, addr = server_socket.accept()
 
-            data = client_socket.recv(1024).decode()
-            json_data = json.loads(data)
-            control_mode = json_data['control_mode']
-            fps = json_data['fps']
-
-            if control_mode == 'remote_teleoperate':
-                teleop_time_s = json_data['teleop_time_s']
-                remote_teleoperate(robot, fps, teleop_time_s, client_socket)
-
-            elif control_mode == "remote_record":
-                warmup_time_s = json_data['warmup_time_s']
-                episode_time_s = json_data['episode_time_s']
-                num_episodes = json_data['num_episodes']
-                repo_id = json_data['repo_id']
-                model_id = json_data['model_id']
-                remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes, repo_id, model_id)
-            
-            client_socket.close()
+            new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
+            threads.append(new_thread)
+            new_thread.start()
     
     except KeyboardInterrupt:
-        robot.disconnect()
-        client_socket.close()
+        
         server_socket.close()
+
+        print("Waiting for threads to stop")
+        for thread in threads:
+            thread.join()
+
+        robot.disconnect()
+        print("Exiting gracefully")
