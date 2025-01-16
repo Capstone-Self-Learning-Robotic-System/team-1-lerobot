@@ -78,7 +78,7 @@ def remote_teleoperate(
     start_episode_t = time.perf_counter()
     
     # teleoperation loop
-    while timestamp < teleop_time_s:
+    while timestamp < teleop_time_s and not program_ending:
         start_loop_t = time.perf_counter()
 
         data = client_socket.recv(24)
@@ -158,7 +158,7 @@ def remote_record(
         timestamp = time.perf_counter() - start_episode_t
         log_control_info(robot, dt_s, fps=fps)
 
-    while curr_episode < num_episodes:
+    while curr_episode < num_episodes and not program_ending:
 
         log_say(f"Recording episode {curr_episode} for {episode_time_s} seconds", True)
 
@@ -166,7 +166,7 @@ def remote_record(
         start_episode_t = time.perf_counter()
 
         # episode loop
-        while timestamp < episode_time_s:
+        while timestamp < episode_time_s and not program_ending:
             start_loop_t = time.perf_counter()
 
             data = client_socket.recv(24)
@@ -218,6 +218,7 @@ def remote_record(
     robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
 
 def accept_client(robot: Robot, client_socket: socket):
+    # TODO: Add case for camera connection
     data = client_socket.recv(1024).decode()
     json_data = json.loads(data)
     control_mode = json_data['control_mode']
@@ -261,7 +262,6 @@ if __name__ == "__main__":
 
     try:
         while True:
-            # TODO: Add case for camera connection
             client_socket, addr = server_socket.accept()
 
             new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
@@ -271,6 +271,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         
         server_socket.close()
+        program_ending = True
 
         print("Waiting for threads to stop")
         for thread in threads:
