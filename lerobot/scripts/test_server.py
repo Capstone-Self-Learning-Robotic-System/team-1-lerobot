@@ -8,7 +8,7 @@ import numpy as np
 from time import sleep
 
 def accept_client(client: socket):
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(8)
     while True:
         ret, frame = camera.read()
 
@@ -26,7 +26,7 @@ def accept_client(client: socket):
 if __name__ == "__main__":
     # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("localhost", 50068))
+    server_socket.bind(("192.168.0.96", 50064))
     server_socket.listen(1)
 
     time_to_stop = False
