@@ -11,8 +11,11 @@ def accept_client(client: socket):
     camera = cv2.VideoCapture(0)
     while True:
         ret, frame = camera.read()
-        pickled = pickle.dumps(frame)
-        client.sendall(pickled)
+
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
+        result, encimg = cv2.imencode('.jpg', frame, encode_param)
+
+        client.sendall(np.array(encimg).tobytes())
         client.send(b'this_is_the_end')
         print("Finshed sending frame")
 

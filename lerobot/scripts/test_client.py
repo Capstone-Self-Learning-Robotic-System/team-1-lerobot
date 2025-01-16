@@ -12,7 +12,7 @@ server.connect(("localhost", 50068))
 buffer = b''
 start = time.perf_counter()
 while True:
-    recv_data = server.recv(1024)
+    recv_data = server.recv(4096)
     buffer += recv_data
 
 
@@ -22,7 +22,8 @@ while True:
 
         data = pieces[0]
         print(len(data))
-        frame = pickle.loads(data)
+        frame = np.asarray(bytearray(data))
+        frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
         
         cv2.imshow("Camera", frame)
         print("Image Displayed, Spent " + str(time.perf_counter() - start) + "s recieving")
