@@ -88,6 +88,7 @@ def remote_teleoperate(
             break
 
         robot.follower_arms["main"].write("Goal_Position", motor_array)
+        print(motor_array)
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
@@ -243,7 +244,7 @@ if __name__ == "__main__":
     init_logging()
 
     # Configure robot
-    robot_path = "./lerobot/configs/robot/koch_follower.yaml"
+    robot_path = "./lerobot/configs/robot/koch_follower_no_cam.yaml"
 
     robot_cfg = init_hydra_config(robot_path, None)
     robot = make_robot(robot_cfg)
@@ -264,9 +265,10 @@ if __name__ == "__main__":
         while True:
             client_socket, addr = server_socket.accept()
 
-            new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
-            threads.append(new_thread)
-            new_thread.start()
+            # new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
+            # threads.append(new_thread)
+            # new_thread.start()
+            accept_client(robot, client_socket)
     
     except KeyboardInterrupt:
         
