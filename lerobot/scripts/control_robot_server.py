@@ -67,6 +67,8 @@ def remote_teleoperate(
 
         print()
     
+    robot.follower_arms["main"].write("Torque_Enable", TorqueMode.ENABLED.value)
+    
     if teleop_time_s == None:
         teleop_time_s = float("inf")
         log_say(f"Teleoperate for infinite time", True)
@@ -120,6 +122,8 @@ def remote_record(
             robot.connect()
 
         print()
+    
+    robot.follower_arms["main"].write("Torque_Enable", TorqueMode.ENABLED.value)
 
     dataset = init_dataset(
         repo_id=repo_id, 
@@ -265,9 +269,9 @@ if __name__ == "__main__":
         while True:
             client_socket, addr = server_socket.accept()
 
-            # new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
-            # threads.append(new_thread)
-            # new_thread.start()
+            new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
+            threads.append(new_thread)
+            new_thread.start()
             accept_client(robot, client_socket)
     
     except KeyboardInterrupt:
