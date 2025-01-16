@@ -7,7 +7,7 @@ import pickle
 import time
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.connect(("localhost", 50068))
+server.connect(("50.39.109.27", 50064))
 
 buffer = b''
 start = time.perf_counter()
