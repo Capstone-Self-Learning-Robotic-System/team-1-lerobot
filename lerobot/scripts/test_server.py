@@ -1,23 +1,29 @@
 import socket
+import pickle
 import threading
+from io import StringIO
+
+import cv2
+import numpy as np
 from time import sleep
 
-
 def accept_client(client: socket):
-        client.send("This is a test\n".encode())
-        i = 0
-        while True and not time_to_stop:
-            client.send((str(i) + "\n").encode())
-            i+=1
-            sleep(1)
+    camera = cv2.VideoCapture(0)
+    while True:
+        ret, frame = camera.read()
+        pickled = pickle.dumps(frame)
+        client.sendall(pickled)
+        client.send(b'this_is_the_end')
+        print("Finshed sending frame")
 
-        client.close()
+        response = client.recv(1024).decode()
+        print(response)
 
 
 if __name__ == "__main__":
     # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("localhost", 50067))
+    server_socket.bind(("localhost", 50068))
     server_socket.listen(1)
 
     time_to_stop = False

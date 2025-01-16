@@ -1,0 +1,34 @@
+from io import StringIO
+
+import cv2
+import numpy as np
+import socket
+import pickle
+import time
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.connect(("localhost", 50068))
+
+buffer = b''
+start = time.perf_counter()
+while True:
+    recv_data = server.recv(1024)
+    buffer += recv_data
+
+
+    if buffer.endswith(b'this_is_the_end'):
+        pieces = buffer.split(b'this_is_the_end')
+        buffer = b''
+
+        data = pieces[0]
+        print(len(data))
+        frame = pickle.loads(data)
+        
+        cv2.imshow("Camera", frame)
+        print("Image Displayed, Spent " + str(time.perf_counter() - start) + "s recieving")
+        start = time.perf_counter()
+        response = ("img_recieved")
+        server.send(response.encode())
+
+    if cv2.waitKey(1) == ord('q'):
+        break
