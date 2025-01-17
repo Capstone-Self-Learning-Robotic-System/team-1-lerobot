@@ -3,6 +3,8 @@ import logging
 import threading
 import time
 import socket
+
+import cv2
 import numpy as np
 import json
 #import torch
@@ -50,6 +52,27 @@ def busy_wait(dt):
 ########################################################################################
 # Control modes
 ########################################################################################
+
+def remote_stream(robot: Robot, client: socket, camera_name: str):
+    # client.sendall(robot.cameras)
+    try:
+        while True and not program_ending:
+            image = robot.cameras[camera_name].async_read()
+
+            # Encode to jpeg for smaller transmission
+            encode_param = [cv2.IMWRITE_JPEG_QUALITY, 70]
+            result, enc_img = cv2.imencode('.jpg', image, encode_param)
+
+            # Send to client and wait for response
+            client.sendall(np.array(enc_img).tobytes())
+            client.send(b'this_is_the_end')
+
+            response = client.recv(1024).decode()
+    except Exception as e:
+        print("Client closed camera connection")
+        client.close()
+
+
 
 
 @safe_disconnect
@@ -227,19 +250,24 @@ def accept_client(robot: Robot, client_socket: socket):
     data = client_socket.recv(1024).decode()
     json_data = json.loads(data)
     control_mode = json_data['control_mode']
-    fps = json_data['fps']
 
     if control_mode == 'remote_teleoperate':
         teleop_time_s = json_data['teleop_time_s']
+        fps = json_data['fps']
         remote_teleoperate(robot, fps, teleop_time_s, client_socket)
 
     elif control_mode == "remote_record":
+        fps = json_data['fps']
         warmup_time_s = json_data['warmup_time_s']
         episode_time_s = json_data['episode_time_s']
         num_episodes = json_data['num_episodes']
         repo_id = json_data['repo_id']
         model_id = json_data['model_id']
         remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes, repo_id, model_id)
+
+    elif control_mode == "remote_stream":
+        camera_name = json_data["camera_name"]
+        remote_stream(robot, client_socket, camera_name)
 
     client_socket.close()
 
