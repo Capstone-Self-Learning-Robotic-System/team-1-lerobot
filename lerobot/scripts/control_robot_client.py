@@ -240,12 +240,15 @@ def remote_stream(
             data = pieces[0]
             print(len(data))
             frame = np.asarray(bytearray(data))
+            print(frame)
             frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             
+            print("trying to show")
             cv2.imshow("Camera", frame)
             print("Image Displayed, Spent " + str(time.perf_counter() - start) + "s recieving")
             start = time.perf_counter()
-            response = ("img_recieved")
+            response = "img_recieved"
             client_socket.send(response.encode())
 
         if cv2.waitKey(1) == ord('q'):
