@@ -5,6 +5,7 @@ import socket
 import numpy as np
 import json
 import tqdm
+import cv2
 from pathlib import Path
 from typing import List
 from datetime import datetime
@@ -229,7 +230,7 @@ def remote_stream(
     buffer = b''
     start = time.perf_counter()
     while True:
-        recv_data = server.recv(4096)
+        recv_data = client_socket.recv(4096)
         buffer += recv_data
 
         if buffer.endswith(b'this_is_the_end'):
@@ -245,7 +246,7 @@ def remote_stream(
             print("Image Displayed, Spent " + str(time.perf_counter() - start) + "s recieving")
             start = time.perf_counter()
             response = ("img_recieved")
-            server.send(response.encode())
+            client_socket.send(response.encode())
 
         if cv2.waitKey(1) == ord('q'):
             break
@@ -323,7 +324,7 @@ if __name__ == "__main__":
 
     parser_stream = subparsers.add_parser("remote_stream", parents=[base_parser])
     parser_stream.add_argument(
-        "--camera-name", type=int, default="laptop", help="Name of the camera to stream from"
+        "--camera-name", type=str, default="laptop", help="Name of the camera to stream from"
     )
     parser_stream.add_argument(
         "--ip", type=str, default=None, help="IP address of host remote socket"
