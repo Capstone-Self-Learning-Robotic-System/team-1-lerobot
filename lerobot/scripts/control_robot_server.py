@@ -310,5 +310,6 @@ if __name__ == "__main__":
         for thread in threads:
             thread.join()
 
+        robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
         robot.disconnect()
         print("Exiting gracefully")
