@@ -208,6 +208,49 @@ def remote_record(
     client_socket.close()
 
 
+@safe_disconnect
+def remote_stream(
+    robot: Robot, 
+    camera_name: str,
+    ip: str,
+    port: int
+):
+
+    # open socket for communication
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((ip, port))
+
+    data = {}
+    data['control_mode'] = 'remote_stream'
+    data['camera_name'] = camera_name
+    json_data = json.dumps(data)
+    client_socket.send(json_data.encode().ljust(1024))
+
+    buffer = b''
+    start = time.perf_counter()
+    while True:
+        recv_data = server.recv(4096)
+        buffer += recv_data
+
+        if buffer.endswith(b'this_is_the_end'):
+            pieces = buffer.split(b'this_is_the_end')
+            buffer = b''
+
+            data = pieces[0]
+            print(len(data))
+            frame = np.asarray(bytearray(data))
+            frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+            
+            cv2.imshow("Camera", frame)
+            print("Image Displayed, Spent " + str(time.perf_counter() - start) + "s recieving")
+            start = time.perf_counter()
+            response = ("img_recieved")
+            server.send(response.encode())
+
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="mode", required=True)
@@ -277,6 +320,18 @@ if __name__ == "__main__":
         "--num-episodes", type=int, default=None, help="Number of episodes recorded",
     )
 
+
+    parser_stream = subparsers.add_parser("remote_stream", parents=[base_parser])
+    parser_teleop.add_argument(
+        "--camera-name", type=int, default="laptop", help="Name of the camera to stream from"
+    )
+    parser_stream.add_argument(
+        "--ip", type=str, default=None, help="IP address of host remote socket"
+    )
+    parser_stream.add_argument(
+        "--port", type=int, default=None, help="Port address of host remote socket"
+    )
+
     args = parser.parse_args()
 
     init_logging()
@@ -297,6 +352,9 @@ if __name__ == "__main__":
 
     elif control_mode == "remote_record":
         remote_record(robot, **kwargs)
+    
+    elif control_mode == "remote_stream":
+        remote_stream(robot, **kwargs)
 
     if robot.is_connected:
         # Disconnect manually to avoid a "Core dump" during process

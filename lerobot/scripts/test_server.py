@@ -9,10 +9,10 @@ from time import sleep
 
 def accept_client(client: socket):
     camera = cv2.VideoCapture(8)
-    while True:
+    while True and not time_to_stop:
         ret, frame = camera.read()
 
-        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 20]
         result, encimg = cv2.imencode('.jpg', frame, encode_param)
 
         client.sendall(np.array(encimg).tobytes())
@@ -26,7 +26,7 @@ def accept_client(client: socket):
 if __name__ == "__main__":
     # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("192.168.0.96", 50064))
+    server_socket.bind(("192.168.0.96", 50065))
     server_socket.listen(1)
 
     time_to_stop = False
