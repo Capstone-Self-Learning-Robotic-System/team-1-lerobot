@@ -12,7 +12,7 @@ server.connect(("50.39.109.27", 50064))
 # 
 data = {}
 data['control_mode'] = "remote_stream"
-data['camera_name'] = "laptop"
+data['camera_name'] = "phone"
 json_data = json.dumps(data)
 server.sendall(json_data.encode())
 

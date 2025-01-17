@@ -71,10 +71,11 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
         response = client.recv(1024).decode()
         print(response)
         dt_s = time.perf_counter() - start_loop_t
-        busy_wait(1 / MAX_FPS - dt_s)
+        # busy_wait(1 / MAX_FPS - dt_s)
     # except Exception as e:
     #     print("Client closed camera connection")
     #     client.close()
+    client.close()
 
 
 
