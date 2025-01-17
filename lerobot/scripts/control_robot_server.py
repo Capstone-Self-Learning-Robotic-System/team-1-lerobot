@@ -303,7 +303,7 @@ if __name__ == "__main__":
             new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
             threads.append(new_thread)
             new_thread.start()
-            accept_client(robot, client_socket)
+            # accept_client(robot, client_socket)
     
     except KeyboardInterrupt:
         

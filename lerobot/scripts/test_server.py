@@ -8,7 +8,7 @@ import numpy as np
 from time import sleep
 
 def accept_client(client: socket):
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(8)
     while True and not time_to_stop:
         ret, frame = camera.read()
 
