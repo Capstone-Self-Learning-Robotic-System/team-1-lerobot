@@ -1,5 +1,5 @@
 _target_: lerobot.common.robot_devices.robots.manipulator.ManipulatorRobot
-robot_type: koch_follower
+robot_type: koch
 calibration_dir: .cache/calibration/koch_follower
 
 # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
