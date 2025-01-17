@@ -6,7 +6,7 @@
 .fleet/
 
 # Python Build Components
-__pycache__/
+*/__pycache__/
 
 # LeRobot Cache / Local Data
 .cache/*
