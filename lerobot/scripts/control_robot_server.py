@@ -57,7 +57,6 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
     # client.sendall(robot.cameras)
     # try:
     while True and not program_ending:
-        start_loop_t = time.perf_counter()
         image = robot.cameras[camera_name].async_read()
 
         # Encode to jpeg for smaller transmission
@@ -69,12 +68,8 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
         client.send(b'this_is_the_end')
 
         response = client.recv(1024).decode()
-        print(response)
-        dt_s = time.perf_counter() - start_loop_t
-        # busy_wait(1 / MAX_FPS - dt_s)
-    # except Exception as e:
-    #     print("Client closed camera connection")
-    #     client.close()
+        # print(response)
+
     client.close()
 
 
@@ -253,7 +248,6 @@ def remote_record(
 def accept_client(robot: Robot, client_socket: socket):
     # TODO: Add case for camera connection
     data = client_socket.recv(1024).decode()
-    print("asdfsadfafs: " + data)
     json_data = json.loads(data)
     control_mode = json_data['control_mode']
 
@@ -302,12 +296,10 @@ if __name__ == "__main__":
     try:
         while True:
             client_socket, addr = server_socket.accept()
-            print("new client has been accepted")
 
             new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
             threads.append(new_thread)
             new_thread.start()
-            # accept_client(robot, client_socket)
     
     except KeyboardInterrupt:
         

@@ -31,11 +31,11 @@ while True:
         print(len(data))
         frame = np.asarray(bytearray(data))
         frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
-        
+
         cv2.imshow("Camera", frame)
-        print("Image Displayed, Spent " + str(time.perf_counter() - start) + "s recieving")
+        # print("Image Displayed, Spent " + str(time.perf_counter() - start) + "s recieving")
         start = time.perf_counter()
-        response = ("img_recieved")
+        response = "img_recieved"
         server.send(response.encode())
 
     if cv2.waitKey(1) == ord('q'):
