@@ -95,6 +95,8 @@ def remote_teleoperate(
             motor_array = robot.leader_arms["main"].read("Present_Position")
             client_socket.sendall(motor_array)
 
+            response = client_socket.recv(1024).decode()
+
             dt_s = time.perf_counter() - start_loop_t
             busy_wait(1 / fps - dt_s)
 

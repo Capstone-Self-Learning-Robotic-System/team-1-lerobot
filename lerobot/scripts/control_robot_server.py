@@ -117,7 +117,7 @@ def remote_teleoperate(
             break
 
         robot.follower_arms["main"].write("Goal_Position", motor_array)
-        print(motor_array)
+        client_socket.send("ack".encode())
 
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
