@@ -322,7 +322,7 @@ if __name__ == "__main__":
 
 
     parser_stream = subparsers.add_parser("remote_stream", parents=[base_parser])
-    parser_teleop.add_argument(
+    parser_stream.add_argument(
         "--camera-name", type=int, default="laptop", help="Name of the camera to stream from"
     )
     parser_stream.add_argument(
