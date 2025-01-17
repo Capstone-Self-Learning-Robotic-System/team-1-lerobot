@@ -1,3 +1,4 @@
+import json
 from io import StringIO
 
 import cv2
@@ -8,6 +9,12 @@ import time
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.connect(("50.39.109.27", 50064))
+
+data = {}
+data['control_mode'] = "remote_stream"
+data['camera_name'] = "laptop"
+json_data = json.dumps(data)
+server.sendall(json_data.encode())
 
 buffer = b''
 start = time.perf_counter()

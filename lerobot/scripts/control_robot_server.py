@@ -57,7 +57,7 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
     # client.sendall(robot.cameras)
     # try:
     while True and not program_ending:
-        image = robot.cameras["laptop"].async_read()
+        image = robot.cameras[camera_name].async_read()
 
         # Encode to jpeg for smaller transmission
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, 70]
@@ -249,6 +249,7 @@ def remote_record(
 def accept_client(robot: Robot, client_socket: socket):
     # TODO: Add case for camera connection
     data = client_socket.recv(1024).decode()
+    print(data)
     json_data = json.loads(data)
     control_mode = json_data['control_mode']
 
