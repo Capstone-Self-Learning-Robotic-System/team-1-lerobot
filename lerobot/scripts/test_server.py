@@ -26,7 +26,7 @@ def accept_client(client: socket):
 if __name__ == "__main__":
     # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("localhost", 50064))
+    server_socket.bind(("localhost", 50065))
     server_socket.listen(1)
 
     time_to_stop = False
