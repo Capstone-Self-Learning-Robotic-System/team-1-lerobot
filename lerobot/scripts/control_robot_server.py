@@ -290,7 +290,7 @@ if __name__ == "__main__":
     # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind(("192.168.0.96", 50064))
-    server_socket.listen(1)
+    server_socket.listen(5)
 
     program_ending = False
     threads = []
@@ -298,6 +298,7 @@ if __name__ == "__main__":
     try:
         while True:
             client_socket, addr = server_socket.accept()
+            print("new client has been accepted")
 
             new_thread = threading.Thread(target=accept_client, args=(robot, client_socket))
             threads.append(new_thread)
