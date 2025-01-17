@@ -56,18 +56,19 @@ def busy_wait(dt):
 def remote_stream(robot: Robot, client: socket, camera_name: str):
     # client.sendall(robot.cameras)
     # try:
-        while True and not program_ending:
-            image = robot.cameras[camera_name].async_read()
+    while True and not program_ending:
+        image = robot.cameras["laptop"].async_read()
 
-            # Encode to jpeg for smaller transmission
-            encode_param = [cv2.IMWRITE_JPEG_QUALITY, 70]
-            result, enc_img = cv2.imencode('.jpg', image, encode_param)
+        # Encode to jpeg for smaller transmission
+        encode_param = [cv2.IMWRITE_JPEG_QUALITY, 70]
+        result, enc_img = cv2.imencode('.jpg', image, encode_param)
 
-            # Send to client and wait for response
-            client.sendall(np.array(enc_img).tobytes())
-            client.send(b'this_is_the_end')
+        # Send to client and wait for response
+        client.sendall(np.array(enc_img).tobytes())
+        client.send(b'this_is_the_end')
 
-            response = client.recv(1024).decode()
+        response = client.recv(1024).decode()
+        print(response)
     # except Exception as e:
     #     print("Client closed camera connection")
     #     client.close()

@@ -227,6 +227,7 @@ def remote_stream(
     json_data = json.dumps(data)
     client_socket.send(json_data.encode().ljust(1024))
 
+    time.sleep(1)
     buffer = b''
     start = time.perf_counter()
     while True:
