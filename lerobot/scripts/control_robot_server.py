@@ -249,7 +249,7 @@ def remote_record(
 def accept_client(robot: Robot, client_socket: socket):
     # TODO: Add case for camera connection
     data = client_socket.recv(1024).decode()
-    print(data)
+    print("asdfsadfafs: " + data)
     json_data = json.loads(data)
     control_mode = json_data['control_mode']
 
