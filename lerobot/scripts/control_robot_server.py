@@ -247,27 +247,27 @@ def remote_record(
 
 def accept_client(robot: Robot, client_socket: socket):
     # TODO: Add case for camera connection
-    data = client_socket.recv(1024).decode()
-    json_data = json.loads(data)
-    control_mode = json_data['control_mode']
+    # data = client_socket.recv(1024).decode()
+    # json_data = json.loads(data)
+    # control_mode = json_data['control_mode']
 
-    if control_mode == 'remote_teleoperate':
-        teleop_time_s = json_data['teleop_time_s']
-        fps = json_data['fps']
-        remote_teleoperate(robot, fps, teleop_time_s, client_socket)
-
-    elif control_mode == "remote_record":
-        fps = json_data['fps']
-        warmup_time_s = json_data['warmup_time_s']
-        episode_time_s = json_data['episode_time_s']
-        num_episodes = json_data['num_episodes']
-        repo_id = json_data['repo_id']
-        model_id = json_data['model_id']
-        remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes, repo_id, model_id)
-
-    elif control_mode == "remote_stream":
-        camera_name = json_data["camera_name"]
-        remote_stream(robot, client_socket, camera_name)
+    # if control_mode == 'remote_teleoperate':
+    #     teleop_time_s = json_data['teleop_time_s']
+    #     fps = json_data['fps']
+    #     remote_teleoperate(robot, fps, teleop_time_s, client_socket)
+    #
+    # elif control_mode == "remote_record":
+    #     fps = json_data['fps']
+    #     warmup_time_s = json_data['warmup_time_s']
+    #     episode_time_s = json_data['episode_time_s']
+    #     num_episodes = json_data['num_episodes']
+    #     repo_id = json_data['repo_id']
+    #     model_id = json_data['model_id']
+    #     remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes, repo_id, model_id)
+    #
+    # elif control_mode == "remote_stream":
+    #   camera_name = json_data["camera_name"]
+    remote_stream(robot, client_socket, "laptop")
 
     client_socket.close()
 
