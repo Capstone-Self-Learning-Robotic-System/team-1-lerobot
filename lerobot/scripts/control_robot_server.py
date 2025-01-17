@@ -276,7 +276,7 @@ if __name__ == "__main__":
     init_logging()
 
     # Configure robot
-    robot_path = "./lerobot/configs/robot/koch_follower_no_cam.yaml"
+    robot_path = "./lerobot/configs/robot/koch_follower.yaml"
 
     robot_cfg = init_hydra_config(robot_path, None)
     robot = make_robot(robot_cfg)
