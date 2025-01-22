@@ -5,6 +5,7 @@ import socket
 import numpy as np
 import json
 import tqdm
+import cv2
 from pathlib import Path
 from typing import List
 from datetime import datetime
@@ -93,6 +94,8 @@ def remote_teleoperate(
 
             motor_array = robot.leader_arms["main"].read("Present_Position")
             client_socket.sendall(motor_array)
+
+            response = client_socket.recv(1024).decode()
 
             dt_s = time.perf_counter() - start_loop_t
             busy_wait(1 / fps - dt_s)
@@ -207,7 +210,6 @@ def remote_record(
 
     client_socket.close()
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="mode", required=True)
@@ -276,6 +278,7 @@ if __name__ == "__main__":
     parser_record.add_argument(
         "--num-episodes", type=int, default=None, help="Number of episodes recorded",
     )
+
 
     args = parser.parse_args()
 
