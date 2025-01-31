@@ -57,15 +57,25 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
     # client.sendall(robot.cameras)
     # try:
     while True and not program_ending:
-        image = robot.cameras[camera_name].async_read()
+        images = []
+        for name in robot.cameras:
+            image = robot.cameras[name].async_read()
+            # Encode to jpeg for smaller transmission
+            encode_param = [cv2.IMWRITE_JPEG_QUALITY, 70]
+            result, enc_img = cv2.imencode('.jpg', image, encode_param)
+            images.append((name, np.array(enc_img).tobytes()))
 
-        # Encode to jpeg for smaller transmission
-        encode_param = [cv2.IMWRITE_JPEG_QUALITY, 70]
-        result, enc_img = cv2.imencode('.jpg', image, encode_param)
 
-        # Send to client and wait for response
-        client.sendall(np.array(enc_img).tobytes())
-        client.send(b'this_is_the_end')
+        # Save image information to json for client
+        data = {}
+        data["camera_info"] = [(x[0], len(x[1])) for x in images]
+        json_data = json.dumps(data)
+        client.sendall(json_data.encode())
+        client.send(b'json_over')
+
+        # Send images to client and wait for response
+        for image in images:
+            client.sendall(image[1])
 
         response = client.recv(1024).decode()
         # print(response)

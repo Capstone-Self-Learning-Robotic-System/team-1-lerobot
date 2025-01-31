@@ -1,42 +1,73 @@
 import json
+import threading
 from io import StringIO
+import PIL
+from PIL import Image, ImageTk
 
 import cv2
 import numpy as np
 import socket
 import pickle
 import time
+import tkinter as tk
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.connect(("50.39.109.27", 50064))
-#
-data = {}
-data['control_mode'] = "remote_stream"
-data['camera_name'] = "phone"
-json_data = json.dumps(data)
-server.sendall(json_data.encode())
+class CameraClient:
+    def run(self):
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.connect(("50.39.109.27", 50064))
+        self.buffer_img = None
+        self.current_img = None
 
-buffer = b''
-start = time.perf_counter()
-while True:
-    recv_data = server.recv(4096)
-    buffer += recv_data
+        server_thread = threading.Thread(target=self.client_thread, args=[self.server])
+        server_thread.start()
 
+        self.root = tk.Tk()
+        self.label = tk.Label(self.root, text="Waiting for first image")
+        self.label.pack()
 
-    if buffer.endswith(b'this_is_the_end'):
-        pieces = buffer.split(b'this_is_the_end')
+        self.root.after(10, self.update_window)
+        self.root.mainloop()
+
+    def client_thread(self, server):
+        #
+        data = {}
+        data['control_mode'] = "remote_stream"
+        data['camera_name'] = "laptop"
+        json_data = json.dumps(data)
+        server.sendall(json_data.encode())
+
         buffer = b''
+        server.setblocking(False)
 
-        data = pieces[0]
-        frame = np.asarray(bytearray(data))
-        frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        while True:
+            recv_data = server.recv(4096)
+            buffer += recv_data
 
-        cv2.imshow("Camera", frame)
-        # print("Image Displayed, Spent " + str(time.perf_counter() - start) + "s recieving")
-        start = time.perf_counter()
-        response = "img_recieved"
-        server.send(response.encode())
+            if not data:
+                pieces = buffer.split(b'json_over')
+                buffer = b''
 
-    if cv2.waitKey(1) == ord('q'):
-        break
+                print(pieces)
+
+                # print("got a frame")
+
+                # data = pieces[0]
+                # frame = np.asarray(bytearray(data))
+                # self.buffer_img = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+                # print(self.buffer_img)
+
+
+    def update_window(self):
+        while self.buffer_img is None:
+            continue
+
+        im = PIL.Image.fromarray(self.buffer_img)
+        self.current_img = PIL.ImageTk.PhotoImage(image = im)
+
+        self.label.config(image=self.current_img)
+        self.label.pack()
+        self.root.after(10, self.update_window)
+
+if __name__ == "__main__":
+    client = CameraClient()
+    client.run()
