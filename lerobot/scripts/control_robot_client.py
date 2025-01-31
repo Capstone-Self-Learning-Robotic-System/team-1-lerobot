@@ -6,6 +6,8 @@ import numpy as np
 import json
 import tqdm
 import cv2
+from pynput.keyboard import Key, Listener
+
 from pathlib import Path
 from typing import List
 from datetime import datetime
@@ -39,12 +41,24 @@ from lerobot.common.utils.utils import init_hydra_config, init_logging, log_say,
 # Util functions
 ########################################################################################
 
-
 def busy_wait(dt):   
     current_time = time.time()
     while (time.time() < current_time+dt):
         pass
-    
+
+term_teleop = False
+term_record = False
+
+def on_release_q(key):
+    if key == Key.esc:
+        term_teleop = True
+        return False
+
+def on_release_e(key):
+    if key == Key.e:
+        term_record = True
+        return False
+
 
 ########################################################################################
 # Control modes
@@ -122,12 +136,12 @@ def remote_record(
     fps: int, 
     ip: str, 
     port: int, 
-    repo_id: str, 
-    model_id: int,
-    warmup_time_s=2, 
-    episode_time_s=5, 
-    num_episodes=3
+    repo_id: str
 ):
+    with Listener(on_release_q=on_release_q, on_release_e=on_release_e) as listener:
+        listener.join(1)
+
+    global term_record, term_teleop
 
     if not robot.is_connected:
         robot.connect()
@@ -139,58 +153,70 @@ def remote_record(
     data = {}
     data['control_mode'] = 'remote_record'
     data['fps'] = fps
-    data['warmup_time_s'] = warmup_time_s
-    data['episode_time_s'] = episode_time_s
-    data['num_episodes'] = num_episodes
     data['repo_id'] = repo_id
-    data['model_id'] = model_id
     json_data = json.dumps(data)
     client_socket.send(json_data.encode().ljust(1024))
 
     curr_episode = 0
 
-    log_say(f"Warmup record for {warmup_time_s} seconds", False)
-    timestamp = 0
-    start_episode_t = time.perf_counter()
+    done_recording = False
 
-    pbar = tqdm.tqdm(range(warmup_time_s*fps))
+    while not done_recording:
 
-    try:
-        # warmup loop
-        while timestamp < warmup_time_s:
-            pbar.update(1)
-            start_loop_t = time.perf_counter()
+        log_say(f"Warmup record", False)
+        timestamp = 0
+        start_episode_t = time.perf_counter()
+        
+        try:
+            # warmup loop
+            while True:
+                start_loop_t = time.perf_counter()
 
-            motor_array = robot.leader_arms["main"].read("Present_Position")
-            client_socket.sendall(motor_array)
+                motor_array = robot.leader_arms["main"].read("Present_Position")
 
-            dt_s = time.perf_counter() - start_loop_t
-            busy_wait(1 / fps - dt_s)
+                if term_teleop:
+                    client_socket.sendall("term_warmup", 24)
+                    term_teleop = False
+                    break
+                else:
+                    client_socket.sendall(motor_array)
+                    
+                response = client_socket.recv(1024).decode()
 
-            dt_s = time.perf_counter() - start_loop_t
-            timestamp = time.perf_counter() - start_episode_t
+                dt_s = time.perf_counter() - start_loop_t
+                busy_wait(1 / fps - dt_s)
 
-    except KeyboardInterrupt:
-        log_say(f"Remote recording terminated", True)
-        curr_episode = num_episodes
+                dt_s = time.perf_counter() - start_loop_t
+                timestamp = time.perf_counter() - start_episode_t
 
-    while curr_episode < num_episodes:
+        except KeyboardInterrupt:
+            log_say(f"Remote recording terminated", True)
 
-        log_say(f"Recording episode {curr_episode} for {episode_time_s} seconds", False)
-
-        pbar = tqdm.tqdm(range(episode_time_s*fps))
+        log_say(f"Recording episode {curr_episode}", False)
 
         timestamp = 0
         start_episode_t = time.perf_counter()
 
         try:
             # episode loop
-            while timestamp < episode_time_s:
-                pbar.update(1)
+            while True:
                 start_loop_t = time.perf_counter()
 
                 motor_array = robot.leader_arms["main"].read("Present_Position")
-                client_socket.sendall(motor_array)
+                
+                if term_teleop:
+                    client_socket.sendall("term_episode", 24)
+                    term_teleop = False
+                    break
+                elif term_record:
+                    client_socket.sendall("term_record", 24)
+                    done_recording = True
+                    term_record = False
+                    break
+                else:
+                    client_socket.sendall(motor_array)
+                
+                response = client_socket.recv(1024).decode()
 
                 dt_s = time.perf_counter() - start_loop_t
                 busy_wait(1 / fps - dt_s)
@@ -200,7 +226,6 @@ def remote_record(
         
         except KeyboardInterrupt:
             log_say(f"Remote recording terminated", True)
-            curr_episode = num_episodes
             break
     
         curr_episode += 1
@@ -252,18 +277,6 @@ if __name__ == "__main__":
         "--fps", type=none_or_int, default=None, help="Frames per second (set to None to disable)"
     )
     parser_record.add_argument(
-        "--warmup-time-s",
-        type=int,
-        default=2,
-        help="Number of seconds before starting data collection. It allows the robot devices to warmup and synchronize.",
-    )
-    parser_record.add_argument(
-        "--episode-time-s",
-        type=int,
-        default=5,
-        help="Number of seconds for data recording for each episode.",
-    )
-    parser_record.add_argument(
         "--ip", type=str, default=None, help="IP address of host remote socket"
     )
     parser_record.add_argument(
@@ -271,12 +284,6 @@ if __name__ == "__main__":
     )
     parser_record.add_argument(
         "--repo-id", type=str, default=str(datetime.now()), help="Dataset identifier",
-    )
-    parser_record.add_argument(
-        "--model-id", type=int, default=None, help="Model identifier",
-    )
-    parser_record.add_argument(
-        "--num-episodes", type=int, default=None, help="Number of episodes recorded",
     )
 
 
