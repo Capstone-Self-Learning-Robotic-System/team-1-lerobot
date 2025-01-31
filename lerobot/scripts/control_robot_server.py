@@ -129,11 +129,7 @@ def remote_teleoperate(
 def remote_record(
     robot: Robot, 
     fps: int, 
-    warmup_time_s: float, 
-    episode_time_s: float, 
-    num_episodes: int, 
     repo_id: str,
-    model_id: int
 ):
 
     # does not work yet...
@@ -143,15 +139,13 @@ def remote_record(
         while not robot.is_connected:
             print(".", end="")
             robot.connect()
-
-        print()
     
     robot.follower_arms["main"].write("Torque_Enable", TorqueMode.ENABLED.value)
 
     dataset = init_dataset(
         repo_id=repo_id, 
         fps=fps, 
-        root="data/model_" + str(model_id), 
+        root="data", 
         force_override=False, 
         video=True,
         write_images=True,
@@ -160,75 +154,32 @@ def remote_record(
     )
 
     curr_episode = 0
+    done_recording = False
 
-    log_say(f"Warmup record for {warmup_time_s} seconds", True)
+    while not done_recording and not program_ending:
 
-    timestamp = 0
-    start_episode_t = time.perf_counter()
-
-    # warmup loop
-    while timestamp < warmup_time_s:
-        start_loop_t = time.perf_counter()
-
-        data = client_socket.recv(24)
-        motor_array = np.frombuffer(data, dtype=np.float32)
-        if not np.any(motor_array):
-            log_say(f"Remote recording terminated", True)
-            curr_episode = num_episodes
-            break
-
-        robot.follower_arms["main"].write("Goal_Position", motor_array)
-
-        dt_s = time.perf_counter() - start_loop_t
-        busy_wait(1 / fps - dt_s)
-
-        dt_s = time.perf_counter() - start_loop_t
-        timestamp = time.perf_counter() - start_episode_t
-        log_control_info(robot, dt_s, fps=fps)
-
-    while curr_episode < num_episodes and not program_ending:
-
-        log_say(f"Recording episode {curr_episode} for {episode_time_s} seconds", True)
+        log_say(f"Warmup record", True)
 
         timestamp = 0
         start_episode_t = time.perf_counter()
 
-        # episode loop
-        while timestamp < episode_time_s and not program_ending:
+        # warmup loop
+        while not program_ending:
             start_loop_t = time.perf_counter()
 
             data = client_socket.recv(24)
+            
+            if data == "term_warmup":
+                break
+
             motor_array = np.frombuffer(data, dtype=np.float32)
-            '''
+
             if not np.any(motor_array):
                 log_say(f"Remote recording terminated", True)
-                curr_episode = num_episodes
                 break
-            '''
 
             robot.follower_arms["main"].write("Goal_Position", motor_array)
-
-            state = []
-            state.append(torch.from_numpy(robot.follower_arms["main"].read("Present_Position")))
-            state = torch.cat(state)
-
-            action = []
-            action.append(torch.from_numpy(motor_array))
-            action = torch.cat(action)
-
-            images = {}
-
-            for name in robot.cameras:
-                images[name] = robot.cameras[name].async_read()
-                images[name] = torch.from_numpy(images[name])
-
-            obs_dict, action_dict = {}, {}
-            obs_dict["observation.state"] = state
-            action_dict["action"] = action
-            for name in robot.cameras:
-                obs_dict[f"observation.images.{name}"] = images[name]
-
-            add_frame(dataset, obs_dict, action_dict)
+            client_socket.send("ack".encode())
 
             dt_s = time.perf_counter() - start_loop_t
             busy_wait(1 / fps - dt_s)
@@ -236,9 +187,61 @@ def remote_record(
             dt_s = time.perf_counter() - start_loop_t
             timestamp = time.perf_counter() - start_episode_t
             log_control_info(robot, dt_s, fps=fps)
-        
-        curr_episode += 1
-        save_current_episode(dataset)
+
+        while not program_ending:
+
+            log_say(f"Recording episode {curr_episode}", True)
+
+            timestamp = 0
+            start_episode_t = time.perf_counter()
+
+            # episode loop
+            while not program_ending:
+                start_loop_t = time.perf_counter()
+
+                data = client_socket.recv(24)
+                motor_array = np.frombuffer(data, dtype=np.float32)
+
+                if data == "term_episode":
+                    break
+                elif data == "term_record":
+                    done_recording = True
+                    break
+
+                robot.follower_arms["main"].write("Goal_Position", motor_array)
+                client_socket.send("ack".encode())
+
+                state = []
+                state.append(torch.from_numpy(robot.follower_arms["main"].read("Present_Position")))
+                state = torch.cat(state)
+
+                action = []
+                action.append(torch.from_numpy(motor_array))
+                action = torch.cat(action).save_current_episode(dataset)
+
+                images = {}
+
+                for name in robot.cameras:
+                    images[name] = robot.cameras[name].async_read()
+                    images[name] = torch.from_numpy(images[name])
+
+                obs_dict, action_dict = {}, {}
+                obs_dict["observation.state"] = state
+                action_dict["action"] = action
+                for name in robot.cameras:
+                    obs_dict[f"observation.images.{name}"] = images[name]
+
+                add_frame(dataset, obs_dict, action_dict)
+
+                dt_s = time.perf_counter() - start_loop_t
+                busy_wait(1 / fps - dt_s)
+
+                dt_s = time.perf_counter() - start_loop_t
+                timestamp = time.perf_counter() - start_episode_t
+                log_control_info(robot, dt_s, fps=fps)
+            
+            curr_episode += 1
+            save_current_episode(dataset)
 
     lerobot_dataset = create_lerobot_dataset(dataset, True, False, None, True)
 
@@ -256,12 +259,8 @@ def accept_client(robot: Robot, client_socket: socket):
 
     elif control_mode == "remote_record":
         fps = json_data['fps']
-        warmup_time_s = json_data['warmup_time_s']
-        episode_time_s = json_data['episode_time_s']
-        num_episodes = json_data['num_episodes']
         repo_id = json_data['repo_id']
-        model_id = json_data['model_id']
-        remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes, repo_id, model_id)
+        remote_record(robot, fps, repo_id)
 
     elif control_mode == "remote_stream":
         camera_name = json_data["camera_name"]

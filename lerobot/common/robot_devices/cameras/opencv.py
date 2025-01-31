@@ -380,7 +380,7 @@ class OpenCVCamera:
         start_time = time.perf_counter()
 
         ret, color_image = self.camera.read()
-
+        
         if not ret:
             raise OSError(f"Can't capture color image from camera {self.camera_index}.")
 
