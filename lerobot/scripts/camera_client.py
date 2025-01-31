@@ -40,10 +40,13 @@ class CameraClient:
         server.setblocking(False)
 
         while True:
-            recv_data = server.recv(4096)
-            buffer += recv_data
-
-            if not data:
+            try:
+                recv_data = server.recv(4096)
+                buffer += recv_data
+            except BlockingIOError:
+                if buffer == b'':
+                    continue
+                
                 pieces = buffer.split(b'json_over')
                 buffer = b''
 
