@@ -7,6 +7,7 @@ import json
 import tqdm
 import cv2
 from pynput.keyboard import Key, Listener
+import os
 
 from pathlib import Path
 from typing import List
@@ -47,17 +48,25 @@ def busy_wait(dt):
         pass
 
 term_teleop = False
-term_record = False
+term_session = False
 
-def on_release_q(key):
-    if key == Key.esc:
+def on_release_ent(key):
+    global term_teleop
+
+    if key == Key.enter:
         term_teleop = True
-        return False
 
-def on_release_e(key):
-    if key == Key.e:
-        term_record = True
-        return False
+def on_release_esc(key):
+    global term_session
+
+    if key == Key.esc:
+        term_session = True
+
+listener_esc = Listener(on_release=on_release_esc)
+listener_esc.start()
+
+listener_ent = Listener(on_release=on_release_ent)
+listener_ent.start()
 
 
 ########################################################################################
@@ -68,61 +77,47 @@ def on_release_e(key):
 @safe_disconnect
 def remote_teleoperate(
     robot: Robot, 
-    fps: int, 
-    ip: str, 
-    port: int,
-    teleop_time_s: float | None
+    fps: int
 ):
+    
+    global term_session, term_teleop
+
     if not robot.is_connected:
         robot.connect()
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((ip, port))
+    client_socket.connect(("50.39.109.27", 50065))
 
     data = {}
     data['control_mode'] = 'remote_teleoperate'
     data['fps'] = fps
-    data['teleop_time_s'] = teleop_time_s
     json_data = json.dumps(data)
     client_socket.send(json_data.encode().ljust(1024))
     
-    if teleop_time_s == None:
-        teleop_time_s = float("inf")
-        log_say(f"Teleoperate for infinite time", True)
-    else:
-        log_say(f"Teleoperate for {teleop_time_s} seconds", False)
-        pbar = tqdm.tqdm(range(teleop_time_s*fps))
-
-    # start timer
-    timestamp = 0
-    start_episode_t = time.perf_counter()
+    log_say(f"Teleoperation Active", True)
     
-    try:
-        # teleoperation loop
-        while timestamp < teleop_time_s:
-            if teleop_time_s != float("inf"):
-                pbar.update(1)
-            
-            start_loop_t = time.perf_counter()
+    teleop = True
 
-            motor_array = robot.leader_arms["main"].read("Present_Position")
+    # teleoperation loop
+    while teleop and not program_ending:
+        
+        start_loop_t = time.perf_counter()
+
+        motor_array = robot.leader_arms["main"].read("Present_Position")
+
+        if term_session:
+            client_socket.sendall(b"term_teleop", 24)
+            term_session = False
+            teleop = False
+            break
+        else:
             client_socket.sendall(motor_array)
 
-            response = client_socket.recv(1024).decode()
+        response = client_socket.recv(1024).decode()
 
-            dt_s = time.perf_counter() - start_loop_t
-            busy_wait(1 / fps - dt_s)
-
-            dt_s = time.perf_counter() - start_loop_t
-            timestamp = time.perf_counter() - start_episode_t
-    
-    except KeyboardInterrupt:
-        log_say(f"Teleoperation terminated", True)
-        robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
-        robot.disconnect()
-
-        client_socket.close()
+        dt_s = time.perf_counter() - start_loop_t
+        busy_wait(1 / fps - dt_s)
 
     robot.leader_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
     robot.disconnect()
@@ -134,21 +129,17 @@ def remote_teleoperate(
 def remote_record(
     robot: Robot, 
     fps: int, 
-    ip: str, 
-    port: int, 
     repo_id: str
 ):
-    with Listener(on_release_q=on_release_q, on_release_e=on_release_e) as listener:
-        listener.join(1)
 
-    global term_record, term_teleop
+    global term_session, term_teleop
 
     if not robot.is_connected:
         robot.connect()
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((ip, port))
+    client_socket.connect(("50.39.109.27", 50065))
 
     data = {}
     data['control_mode'] = 'remote_record'
@@ -159,74 +150,68 @@ def remote_record(
 
     curr_episode = 0
 
-    done_recording = False
+    recording = True
 
-    while not done_recording:
+    while recording and not program_ending:
 
-        log_say(f"Warmup record", False)
-        timestamp = 0
-        start_episode_t = time.perf_counter()
+        log_say(f"Warmup Active", True)
+
+        warmup = True
         
-        try:
-            # warmup loop
-            while True:
-                start_loop_t = time.perf_counter()
+        # warmup loop
+        while warmup:
+            start_loop_t = time.perf_counter()
 
-                motor_array = robot.leader_arms["main"].read("Present_Position")
+            motor_array = robot.leader_arms["main"].read("Present_Position")
 
-                if term_teleop:
-                    client_socket.sendall("term_warmup", 24)
-                    term_teleop = False
-                    break
-                else:
-                    client_socket.sendall(motor_array)
-                    
-                response = client_socket.recv(1024).decode()
-
-                dt_s = time.perf_counter() - start_loop_t
-                busy_wait(1 / fps - dt_s)
-
-                dt_s = time.perf_counter() - start_loop_t
-                timestamp = time.perf_counter() - start_episode_t
-
-        except KeyboardInterrupt:
-            log_say(f"Remote recording terminated", True)
-
-        log_say(f"Recording episode {curr_episode}", False)
-
-        timestamp = 0
-        start_episode_t = time.perf_counter()
-
-        try:
-            # episode loop
-            while True:
-                start_loop_t = time.perf_counter()
-
-                motor_array = robot.leader_arms["main"].read("Present_Position")
+            if term_teleop:
+                client_socket.sendall(b"term_teleop", 24)
+                term_teleop = False
+                warmup = False
+                continue
+            elif term_session:
+                client_socket.sendall(b"term_session", 24)
+                term_session = False
+                record = False
+                recording = False
+                break
+            else:
+                client_socket.sendall(motor_array)
                 
-                if term_teleop:
-                    client_socket.sendall("term_episode", 24)
-                    term_teleop = False
-                    break
-                elif term_record:
-                    client_socket.sendall("term_record", 24)
-                    done_recording = True
-                    term_record = False
-                    break
-                else:
-                    client_socket.sendall(motor_array)
-                
-                response = client_socket.recv(1024).decode()
+            response = client_socket.recv(1024).decode()
 
-                dt_s = time.perf_counter() - start_loop_t
-                busy_wait(1 / fps - dt_s)
+            dt_s = time.perf_counter() - start_loop_t
+            busy_wait(1 / fps - dt_s)
 
-                dt_s = time.perf_counter() - start_loop_t
-                timestamp = time.perf_counter() - start_episode_t
-        
-        except KeyboardInterrupt:
-            log_say(f"Remote recording terminated", True)
-            break
+        if recording:
+            log_say(f"Recording Episode {curr_episode} Active", True)
+
+        episode = True
+
+        # episode loop
+        while episode and not program_ending:
+            start_loop_t = time.perf_counter()
+
+            motor_array = robot.leader_arms["main"].read("Present_Position")
+            
+            if term_teleop:
+                client_socket.sendall(b"term_teleop", 24)
+                term_teleop = False
+                episode = False
+                continue
+            elif term_session:
+                client_socket.sendall(b"term_session", 24)
+                term_session = False
+                episode = False
+                recording = False
+                break
+            else:
+                client_socket.sendall(motor_array)
+            
+            response = client_socket.recv(1024).decode()
+
+            dt_s = time.perf_counter() - start_loop_t
+            busy_wait(1 / fps - dt_s)
     
         curr_episode += 1
     
@@ -239,7 +224,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="mode", required=True)
 
-    # Set common options for all the subparsers
+    # Set common options for aimport osll the subparsers
     base_parser = argparse.ArgumentParser(add_help=False)
     base_parser.add_argument(
         "--robot-path",
@@ -258,15 +243,6 @@ if __name__ == "__main__":
     parser_teleop.add_argument(
         "--fps", type=int, default=None, help="Frames per second (set to None to disable)"
     )
-    parser_teleop.add_argument(
-        "--teleop-time-s", type=int, default=None, help="Number of seconds of teleoperation (set to None for infinite teleoperation)"
-    )
-    parser_teleop.add_argument(
-        "--ip", type=str, default=None, help="IP address of host remote socket"
-    )
-    parser_teleop.add_argument(
-        "--port", type=int, default=None, help="Port address of host remote socket"
-    )
 
 
     ############################################################
@@ -275,12 +251,6 @@ if __name__ == "__main__":
     parser_record = subparsers.add_parser("remote_record", parents=[base_parser])
     parser_record.add_argument(
         "--fps", type=none_or_int, default=None, help="Frames per second (set to None to disable)"
-    )
-    parser_record.add_argument(
-        "--ip", type=str, default=None, help="IP address of host remote socket"
-    )
-    parser_record.add_argument(
-        "--port", type=int, default=None, help="Port address of host remote socket"
     )
     parser_record.add_argument(
         "--repo-id", type=str, default=str(datetime.now()), help="Dataset identifier",
@@ -302,13 +272,22 @@ if __name__ == "__main__":
     robot_cfg = init_hydra_config(robot_path, robot_overrides)
     robot = make_robot(robot_cfg)
 
-    if control_mode == "remote_teleoperate":
-        remote_teleoperate(robot, **kwargs)
+    program_ending = False
 
-    elif control_mode == "remote_record":
-        remote_record(robot, **kwargs)
+    try:
 
-    if robot.is_connected:
-        # Disconnect manually to avoid a "Core dump" during process
-        # termination due to camera threads not properly exiting.
-        robot.disconnect()
+        if control_mode == "remote_teleoperate":
+            remote_teleoperate(robot, **kwargs)
+
+        elif control_mode == "remote_record":
+            remote_record(robot, **kwargs)
+
+        if robot.is_connected:
+            # Disconnect manually to avoid a "Core dump" during process
+            # termination due to camera threads not properly exiting.
+            robot.disconnect()
+    
+    except KeyboardInterrupt:
+        program_ending = True
+        print("Exiting Gracefully")
+

@@ -6,13 +6,14 @@ import numpy as np
 import socket
 import pickle
 import time
+import sys
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.connect(("50.39.109.27", 50064))
+server.connect(("50.39.109.27", 50065))
 #
 data = {}
 data['control_mode'] = "remote_stream"
-data['camera_name'] = "phone"
+data['camera_name'] = sys.argv[1]
 json_data = json.dumps(data)
 server.sendall(json_data.encode())
 
