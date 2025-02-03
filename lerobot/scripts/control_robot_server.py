@@ -52,7 +52,6 @@ def busy_wait(dt):
 ########################################################################################
 # Control modes
 ########################################################################################
-MAX_FPS = 10
 def remote_stream(robot: Robot, client: socket, camera_name: str):
     # client.sendall(robot.cameras)
     # try:
@@ -70,13 +69,14 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
         data = {}
         data["camera_info"] = [(x[0], len(x[1])) for x in images]
         json_data = json.dumps(data)
-        client.sendall(json_data.encode())
-        client.send(b'json_over')
+        send_buffer = json_data.encode()
+        send_buffer += b'json_over'
 
         # Send images to client and wait for response
         for image in images:
-            client.sendall(image[1])
+            send_buffer += image[1]
 
+        client.sendall(send_buffer)
         response = client.recv(1024).decode()
         # print(response)
 
