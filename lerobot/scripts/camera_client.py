@@ -37,22 +37,37 @@ class CameraClient:
         server.sendall(json_data.encode())
 
         buffer = b''
-        server.setblocking(False)
 
         while True:
+            server.setblocking(False)
+            recv_data = None
             try:
                 recv_data = server.recv(4096)
                 buffer += recv_data
             except BlockingIOError:
                 if buffer == b'':
                     continue
+                if recv_data:
+                    buffer += recv_data
+
+                json_bytes = buffer[:buffer.find(b'json_over')]
+                image_bytes = buffer[(buffer.find(b'json_over') + 9):]
+
+                # print(json_bytes.decode())
+                json_data = json.loads(json_bytes.decode())
+                expected_image_bytes = 0
+                for image_data in json_data["camera_info"]:
+                    expected_image_bytes += int(image_data[1])
+
+                print(json_data)
+                print(expected_image_bytes)
                 
-                pieces = buffer.split(b'json_over')
+                server.setblocking(True)
+                while len(image_bytes) < expected_image_bytes:
+                    image_bytes += server.recv(4096)
+                    print(len(image_bytes))
+
                 buffer = b''
-
-                print(pieces)
-
-                # print("got a frame")
 
                 # data = pieces[0]
                 # frame = np.asarray(bytearray(data))
