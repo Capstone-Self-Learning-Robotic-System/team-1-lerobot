@@ -72,7 +72,7 @@ def put_the_marker(
 ########################################################################################
 # Control modes
 ########################################################################################
-MAX_FPS = 10
+MAX_FPS = 30
 def remote_stream(robot: Robot, client: socket, camera_name: str):
     # client.sendall(robot.cameras)
     # try:
@@ -309,7 +309,7 @@ if __name__ == "__main__":
 
     # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("192.168.0.96", 50064))
+    server_socket.bind(("192.168.0.96", 50065))
     server_socket.listen(5)
 
     program_ending = False
