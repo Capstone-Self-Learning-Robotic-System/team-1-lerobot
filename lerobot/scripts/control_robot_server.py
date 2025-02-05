@@ -7,10 +7,10 @@ import socket
 import cv2
 import numpy as np
 import json
-#import torch
 from pathlib import Path
 from typing import List
 import torch
+import pickle
 
 from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
 
@@ -42,12 +42,32 @@ from lerobot.common.utils.utils import init_hydra_config, init_logging, log_say,
 # Util functions
 ########################################################################################
 
+coords = {"phone": (50,50), "laptop": (50,50)}
 
 def busy_wait(dt):   
     current_time = time.time()
     while (time.time() < current_time+dt):
         pass
-    
+
+def put_the_marker(
+    image,
+    name,
+    radius=10,
+    border_color=(0, 0, 255),
+    cross_color=(0, 0, 255),
+    bg_color=(255, 255, 255)
+):
+        global center
+        center = coords[name]
+        x, y = center
+        
+        cv2.circle(image, center, radius, bg_color, -1)
+        cv2.circle(image, center, radius, border_color, 2)
+        cv2.line(image, (x, y - (radius - 1)), (x, y + (radius - 1)), cross_color, 2)
+        cv2.line(image, (x - (radius - 1), y), (x + (radius - 1), y), cross_color, 2)
+        
+        return image
+
 
 ########################################################################################
 # Control modes
@@ -58,6 +78,7 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
     # try:
     while True and not program_ending:
         image = robot.cameras[camera_name].async_read()
+        image = put_the_marker(image, camera_name)
 
         # Encode to jpeg for smaller transmission
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, 70]
@@ -67,8 +88,8 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
         client.sendall(np.array(enc_img).tobytes())
         client.send(b'this_is_the_end')
 
-        response = client.recv(1024).decode()
-        # print(response)
+        response = client.recv(1024)
+        coords[camera_name] = pickle.loads(response)
 
 
 @safe_disconnect
@@ -87,7 +108,7 @@ def remote_teleoperate(
     
     log_say(f"Teleoperation Active", False)
 
-    teleop = True
+    teleop = True        # Now we have a valid (x, y)
     
     # teleoperation loop
     while teleop and not program_ending:
@@ -207,7 +228,7 @@ def remote_record(
             motor_array = np.frombuffer(data, dtype=np.float32)
 
             if not np.any(motor_array):
-                log_say(f"Remote Recording Rerminated", False)
+                log_say(f"Remote Recording Terminated", False)
                 break
 
             robot.follower_arms["main"].write("Goal_Position", motor_array)
@@ -225,6 +246,7 @@ def remote_record(
 
             for name in robot.cameras:
                 images[name] = robot.cameras[name].async_read()
+                images[name] = put_the_marker(images[name], name)
                 images[name] = torch.from_numpy(images[name])
 
             obs_dict, action_dict = {}, {}
@@ -234,9 +256,6 @@ def remote_record(
                 obs_dict[f"observation.images.{name}"] = images[name]
 
             add_frame(dataset, obs_dict, action_dict)
-
-            dt_s = time.perf_counter() - start_loop_t
-            busy_wait(1 / fps - dt_s)
 
             dt_s = time.perf_counter() - start_loop_t
             timestamp = time.perf_counter() - start_episode_t
@@ -290,7 +309,7 @@ if __name__ == "__main__":
 
     # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("192.168.0.96", 50065))
+    server_socket.bind(("192.168.0.96", 50064))
     server_socket.listen(5)
 
     program_ending = False
