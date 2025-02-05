@@ -87,7 +87,7 @@ def remote_teleoperate(
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("50.39.109.27", 50065))
+    client_socket.connect(("50.39.109.27", 50064))
 
     data = {}
     data['control_mode'] = 'remote_teleoperate'
@@ -139,7 +139,7 @@ def remote_record(
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("50.39.109.27", 50065))
+    client_socket.connect(("50.39.109.27", 50064))
 
     data = {}
     data['control_mode'] = 'remote_record'
@@ -241,7 +241,7 @@ if __name__ == "__main__":
 
     parser_teleop = subparsers.add_parser("remote_teleoperate", parents=[base_parser])
     parser_teleop.add_argument(
-        "--fps", type=int, default=None, help="Frames per second (set to None to disable)"
+        "--fps", type=int, default=30, help="Frames per second (set to None to disable)"
     )
 
 
