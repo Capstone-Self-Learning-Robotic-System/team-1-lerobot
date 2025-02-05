@@ -18,7 +18,7 @@ def update_coords(event,x,y,flags,param):
 if __name__ == "__main__":
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.connect(("50.39.109.27", 50064))
+    server.connect(("50.39.109.27", 50065))
     #
     data = {}
     data['control_mode'] = "remote_stream"

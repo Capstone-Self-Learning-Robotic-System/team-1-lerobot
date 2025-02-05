@@ -87,7 +87,7 @@ def remote_teleoperate(
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("50.39.109.27", 50064))
+    client_socket.connect(("50.39.109.27", 50065))
 
     data = {}
     data['control_mode'] = 'remote_teleoperate'
@@ -139,7 +139,7 @@ def remote_record(
 
     # open socket for communication
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(("50.39.109.27", 50064))
+    client_socket.connect(("50.39.109.27", 50065))
 
     data = {}
     data['control_mode'] = 'remote_record'
@@ -289,5 +289,6 @@ if __name__ == "__main__":
     
     except KeyboardInterrupt:
         program_ending = True
+        robot.disconnect()
         print("Exiting Gracefully")
 
