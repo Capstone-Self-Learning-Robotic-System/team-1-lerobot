@@ -70,16 +70,11 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
         response = client.recv(1024).decode()
         # print(response)
 
-    client.close()
-
-
-
 
 @safe_disconnect
 def remote_teleoperate(
     robot: Robot, 
     fps: int, 
-    teleop_time_s: float, 
     client_socket: socket
 ):
     if not robot.is_connected:
@@ -87,29 +82,28 @@ def remote_teleoperate(
         while not robot.is_connected:
             print(".", end="")
             robot.connect()
-
-        print()
     
     robot.follower_arms["main"].write("Torque_Enable", TorqueMode.ENABLED.value)
     
-    if teleop_time_s == None:
-        teleop_time_s = float("inf")
-        log_say(f"Teleoperate for infinite time", True)
-    else:
-        log_say(f"Teleoperate for {teleop_time_s} seconds", True)
+    log_say(f"Teleoperation Active", False)
 
-    # start timer
-    timestamp = 0
-    start_episode_t = time.perf_counter()
+    teleop = True
     
     # teleoperation loop
-    while timestamp < teleop_time_s and not program_ending:
+    while teleop and not program_ending:
         start_loop_t = time.perf_counter()
 
         data = client_socket.recv(24)
+
+        if data == b"term_teleop":
+            teleop = False
+            log_say(f"Teleoperation Terminated", False)
+            continue
+        
         motor_array = np.frombuffer(data, dtype=np.float32)
+
         if not np.any(motor_array):
-            log_say(f"Teleoperation terminated", True)
+            log_say(f"Teleoperation Terminated", False)
             break
 
         robot.follower_arms["main"].write("Goal_Position", motor_array)
@@ -118,8 +112,6 @@ def remote_teleoperate(
         dt_s = time.perf_counter() - start_loop_t
         busy_wait(1 / fps - dt_s)
 
-        dt_s = time.perf_counter() - start_loop_t
-        timestamp = time.perf_counter() - start_episode_t
         log_control_info(robot, dt_s, fps=fps)
     
     robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
@@ -129,29 +121,23 @@ def remote_teleoperate(
 def remote_record(
     robot: Robot, 
     fps: int, 
-    warmup_time_s: float, 
-    episode_time_s: float, 
-    num_episodes: int, 
     repo_id: str,
-    model_id: int
 ):
 
-    # does not work yet...
+    global program_ending
 
     if not robot.is_connected:
         print("Robot was not connected, attempting to reconnect", end="")
         while not robot.is_connected:
             print(".", end="")
             robot.connect()
-
-        print()
     
     robot.follower_arms["main"].write("Torque_Enable", TorqueMode.ENABLED.value)
 
     dataset = init_dataset(
         repo_id=repo_id, 
         fps=fps, 
-        root="data/model_" + str(model_id), 
+        root="data", 
         force_override=False, 
         video=True,
         write_images=True,
@@ -161,52 +147,71 @@ def remote_record(
 
     curr_episode = 0
 
-    log_say(f"Warmup record for {warmup_time_s} seconds", True)
+    while not program_ending:
 
-    timestamp = 0
-    start_episode_t = time.perf_counter()
+        log_say(f"Warmup Active", False)
 
-    # warmup loop
-    while timestamp < warmup_time_s:
-        start_loop_t = time.perf_counter()
+        warmup = True
 
-        data = client_socket.recv(24)
-        motor_array = np.frombuffer(data, dtype=np.float32)
-        if not np.any(motor_array):
-            log_say(f"Remote recording terminated", True)
-            curr_episode = num_episodes
-            break
+        # warmup loop
+        
+        while warmup and not program_ending:
+            start_loop_t = time.perf_counter()
 
-        robot.follower_arms["main"].write("Goal_Position", motor_array)
+            data = client_socket.recv(24)
+            
+            if data == b"term_teleop":
+                warmup = False
+                continue
+            elif data == b"term_session":
+                log_say(f"Remote Recording Rerminated", False)
+                program_ending = True
+                break
 
-        dt_s = time.perf_counter() - start_loop_t
-        busy_wait(1 / fps - dt_s)
+            motor_array = np.frombuffer(data, dtype=np.float32)
 
-        dt_s = time.perf_counter() - start_loop_t
-        timestamp = time.perf_counter() - start_episode_t
-        log_control_info(robot, dt_s, fps=fps)
+            if not np.any(motor_array):
+                log_say(f"Remote Recording Rerminated", False)
+                break
 
-    while curr_episode < num_episodes and not program_ending:
+            robot.follower_arms["main"].write("Goal_Position", motor_array)
+            client_socket.send("ack".encode())
 
-        log_say(f"Recording episode {curr_episode} for {episode_time_s} seconds", True)
+            dt_s = time.perf_counter() - start_loop_t
+            busy_wait(1 / fps - dt_s)
+
+            dt_s = time.perf_counter() - start_loop_t
+            log_control_info(robot, dt_s, fps=fps)
+
+        record = True
+
+        log_say(f"Recording episode {curr_episode}", False)
 
         timestamp = 0
         start_episode_t = time.perf_counter()
 
         # episode loop
-        while timestamp < episode_time_s and not program_ending:
+        while record and not program_ending:
             start_loop_t = time.perf_counter()
 
             data = client_socket.recv(24)
-            motor_array = np.frombuffer(data, dtype=np.float32)
-            '''
-            if not np.any(motor_array):
-                log_say(f"Remote recording terminated", True)
-                curr_episode = num_episodes
+
+            if data == b"term_teleop":
+                record = False
+                continue
+            elif data == b"term_session":
+                log_say(f"Remote Recording Rerminated", False)
+                program_ending = True
                 break
-            '''
+            
+            motor_array = np.frombuffer(data, dtype=np.float32)
+
+            if not np.any(motor_array):
+                log_say(f"Remote Recording Rerminated", False)
+                break
 
             robot.follower_arms["main"].write("Goal_Position", motor_array)
+            client_socket.send("ack".encode())
 
             state = []
             state.append(torch.from_numpy(robot.follower_arms["main"].read("Present_Position")))
@@ -236,13 +241,17 @@ def remote_record(
             dt_s = time.perf_counter() - start_loop_t
             timestamp = time.perf_counter() - start_episode_t
             log_control_info(robot, dt_s, fps=fps)
-        
-        curr_episode += 1
-        save_current_episode(dataset)
+            
+        if not program_ending:
+            curr_episode += 1
+            save_current_episode(dataset)
 
     lerobot_dataset = create_lerobot_dataset(dataset, True, False, None, True)
 
     robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+
+    program_ending = False
+
 
 def accept_client(robot: Robot, client_socket: socket):
     data = client_socket.recv(1024).decode()
@@ -250,24 +259,20 @@ def accept_client(robot: Robot, client_socket: socket):
     control_mode = json_data['control_mode']
 
     if control_mode == 'remote_teleoperate':
-        teleop_time_s = json_data['teleop_time_s']
         fps = json_data['fps']
-        remote_teleoperate(robot, fps, teleop_time_s, client_socket)
+        remote_teleoperate(robot, fps, client_socket)
 
     elif control_mode == "remote_record":
         fps = json_data['fps']
-        warmup_time_s = json_data['warmup_time_s']
-        episode_time_s = json_data['episode_time_s']
-        num_episodes = json_data['num_episodes']
         repo_id = json_data['repo_id']
-        model_id = json_data['model_id']
-        remote_record(robot, fps, warmup_time_s, episode_time_s, num_episodes, repo_id, model_id)
+        remote_record(robot, fps, repo_id)
 
     elif control_mode == "remote_stream":
         camera_name = json_data["camera_name"]
         remote_stream(robot, client_socket, camera_name)
 
     client_socket.close()
+
 
 if __name__ == "__main__":
 
@@ -285,7 +290,7 @@ if __name__ == "__main__":
 
     # Open socket for communication
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(("192.168.0.96", 50064))
+    server_socket.bind(("192.168.0.96", 50065))
     server_socket.listen(5)
 
     program_ending = False
@@ -304,10 +309,10 @@ if __name__ == "__main__":
         server_socket.close()
         program_ending = True
 
-        print("Waiting for threads to stop")
+        print("Waiting for Threads to Stop")
         for thread in threads:
             thread.join()
 
         robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
         robot.disconnect()
-        print("Exiting gracefully")
+        print("Exiting Gracefully")
