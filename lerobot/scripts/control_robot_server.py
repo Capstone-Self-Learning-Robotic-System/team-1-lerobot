@@ -12,6 +12,20 @@ from typing import List
 import torch
 import pickle
 
+from lerobot.common.policies.act.modeling_act import ACTPolicy
+import time
+from lerobot.scripts.control_robot import busy_wait
+from lerobot.common.robot_devices.robots.manipulator import ManipulatorRobot
+from lerobot.common.robot_devices.motors.dynamixel import DynamixelMotorsBus
+from lerobot.common.robot_devices.cameras.opencv import OpenCVCamera
+import torch 
+import os
+import platform
+import cv2
+
+from lerobot.common.robot_devices.robots.factory import make_robot
+from lerobot.common.utils.utils import init_hydra_config, init_logging, log_say, none_or_int
+
 from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
 
 # from safetensors.torch import load_file, save_file
@@ -43,6 +57,8 @@ from lerobot.common.utils.utils import init_hydra_config, init_logging, log_say,
 ########################################################################################
 
 coords = {"phone": (50,50), "laptop": (50,50)}
+
+img_buffer = {"phone": None, "laptop": None}
 
 def busy_wait(dt):   
     current_time = time.time()
@@ -79,6 +95,7 @@ def remote_stream(robot: Robot, client: socket, camera_name: str):
     while True and not program_ending:
         image = robot.cameras[camera_name].async_read()
         image = put_the_marker(image, camera_name)
+        img_buffer[camera_name] = image
 
         # Encode to jpeg for smaller transmission
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, 70]
@@ -108,7 +125,7 @@ def remote_teleoperate(
     
     log_say(f"Teleoperation Active", False)
 
-    teleop = True        # Now we have a valid (x, y)
+    teleop = True
     
     # teleoperation loop
     while teleop and not program_ending:
@@ -139,13 +156,87 @@ def remote_teleoperate(
 
 
 @safe_disconnect
+def remote_inference(
+    robot: Robot, 
+    fps: int, 
+    client_socket: socket
+):
+    
+    global img_buffer
+
+    robot.follower_arms["main"].write("Torque_Enable", TorqueMode.ENABLED.value)
+    
+    log_say(f"Inference Active", False)
+
+    device = "cuda"
+
+    ckpt_path = "/home/revolabs/cs_capstone/lerobot/outputs/train/act_koch_follow_marker/checkpoints/last/pretrained_model"
+    #ckpt_path = "/home/revolabs/cs_capstone/lerobot/outputs/train/koch_reach_the_marked_object_last/last/pretrained_model"
+    policy = ACTPolicy.from_pretrained(ckpt_path)
+    policy.to(device)
+
+    rest_position = robot.follower_arms["main"].read("Present_Position")
+    
+    # inference loop
+    for _ in range(fps*30):
+        start_loop_t = time.perf_counter()
+
+        state = []
+        state.append(torch.from_numpy(robot.follower_arms["main"].read("Present_Position")))
+        state = torch.cat(state)
+
+        images = {}
+
+        for name in robot.cameras:
+            images[name] = torch.from_numpy(img_buffer[name])
+
+        obs_dict, action_dict = {}, {}
+        obs_dict["observation.state"] = state
+        for name in robot.cameras:
+            obs_dict[f"observation.images.{name}"] = images[name]
+
+        for name in obs_dict:
+            if "image" in name:
+                obs_dict[name] = obs_dict[name].type(torch.float32) / 255
+                obs_dict[name] = obs_dict[name].permute(2, 0, 1).contiguous()
+            obs_dict[name] = obs_dict[name].unsqueeze(0)
+            obs_dict[name] = obs_dict[name].to(device)
+        
+        # Compute the next action with the policy
+        # based on the current observation
+        action = policy.select_action(obs_dict)
+        # Remove batch dimension
+        action = action.squeeze(0)
+        # Move to cpu, if not already the case
+        action = action.to("cpu")
+        # Order the robot to move
+        robot.send_action(action)
+        
+        dt_s = time.perf_counter() - start_loop_t
+        busy_wait(1 / fps - dt_s)
+
+        log_control_info(robot, dt_s, fps=fps)
+
+    current_pos = robot.follower_arms["main"].read("Present_Position")
+
+    steps = 30
+
+    for i in range(steps):
+        intermediate_pos = current_pos + (rest_position - current_pos) * (i / steps)
+        robot.follower_arms["main"].write("Goal_Position", intermediate_pos)
+        time.sleep(0.1) #try busy_wait
+    
+    robot.follower_arms["main"].write("Torque_Enable", TorqueMode.DISABLED.value)
+
+
+@safe_disconnect
 def remote_record(
     robot: Robot, 
     fps: int, 
     repo_id: str,
 ):
 
-    global program_ending
+    global program_ending, img_buffer
 
     if not robot.is_connected:
         print("Robot was not connected, attempting to reconnect", end="")
@@ -245,9 +336,7 @@ def remote_record(
             images = {}
 
             for name in robot.cameras:
-                images[name] = robot.cameras[name].async_read()
-                images[name] = put_the_marker(images[name], name)
-                images[name] = torch.from_numpy(images[name])
+                images[name] = torch.from_numpy(img_buffer[name])
 
             obs_dict, action_dict = {}, {}
             obs_dict["observation.state"] = state
@@ -280,6 +369,10 @@ def accept_client(robot: Robot, client_socket: socket):
     if control_mode == 'remote_teleoperate':
         fps = json_data['fps']
         remote_teleoperate(robot, fps, client_socket)
+
+    elif control_mode == 'remote_inference':
+        fps = json_data['fps']
+        remote_inference(robot, fps, client_socket)
 
     elif control_mode == "remote_record":
         fps = json_data['fps']
@@ -325,6 +418,7 @@ if __name__ == "__main__":
     
     except KeyboardInterrupt:
         
+        client_socket.close()
         server_socket.close()
         program_ending = True
 
