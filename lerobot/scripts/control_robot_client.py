@@ -126,6 +126,27 @@ def remote_teleoperate(
 
 
 @safe_disconnect
+def remote_inference(
+    robot: Robot, 
+    fps: int
+):
+
+    # open socket for communication
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect(("50.39.109.27", 50065))
+
+    data = {}
+    data['control_mode'] = 'remote_inference'
+    data['fps'] = fps
+    json_data = json.dumps(data)
+    client_socket.send(json_data.encode().ljust(1024))
+    
+    log_say(f"Inference Active", True)
+    
+    client_socket.close()
+
+
+@safe_disconnect
 def remote_record(
     robot: Robot, 
     fps: int, 
@@ -256,6 +277,11 @@ if __name__ == "__main__":
         "--repo-id", type=str, default=str(datetime.now()), help="Dataset identifier",
     )
 
+    parser_inference = subparsers.add_parser("remote_inference", parents=[base_parser])
+    parser_inference.add_argument(
+        "--fps", type=none_or_int, default=30, help="Frames per second (set to None to disable)"
+    )
+
 
     args = parser.parse_args()
 
@@ -278,6 +304,9 @@ if __name__ == "__main__":
 
         if control_mode == "remote_teleoperate":
             remote_teleoperate(robot, **kwargs)
+
+        elif control_mode == "remote_inference":
+            remote_inference(robot, **kwargs)
 
         elif control_mode == "remote_record":
             remote_record(robot, **kwargs)
