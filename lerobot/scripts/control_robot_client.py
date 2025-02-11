@@ -128,7 +128,8 @@ def remote_teleoperate(
 @safe_disconnect
 def remote_inference(
     robot: Robot, 
-    fps: int
+    fps: int,
+    inference_time_s: int
 ):
 
     # open socket for communication
@@ -138,6 +139,7 @@ def remote_inference(
     data = {}
     data['control_mode'] = 'remote_inference'
     data['fps'] = fps
+    data['inference_time_s'] = inference_time_s
     json_data = json.dumps(data)
     client_socket.send(json_data.encode().ljust(1024))
     
@@ -280,6 +282,9 @@ if __name__ == "__main__":
     parser_inference = subparsers.add_parser("remote_inference", parents=[base_parser])
     parser_inference.add_argument(
         "--fps", type=none_or_int, default=30, help="Frames per second (set to None to disable)"
+    )
+    parser_inference.add_argument(
+        "--inference-time-s", type=int, default=10, help="Amount of time inference occurs"
     )
 
 
